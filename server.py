@@ -794,7 +794,15 @@ async def get_tags_csv(request):
             return web.json_response({"success": False, "error": "无效的文件名"}, status=400)
         
         tags_data = config_manager.load_tags_csv(filename)
-        return web.json_response({"success": True, "data": tags_data})
+        return web.json_response(
+            {"success": True, "data": tags_data},
+            # FIXME #81暫時處裡，防止請求被快取(但根本問題尚需優化)
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     except Exception as e:
         print(f"{ERROR_PREFIX} 加载CSV标签文件失败 | 错误:{str(e)}")
         return web.json_response({"success": False, "error": str(e)}, status=500)
