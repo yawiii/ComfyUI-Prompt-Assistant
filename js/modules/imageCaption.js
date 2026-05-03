@@ -1953,54 +1953,77 @@ class ImageCaption {
      */
     _setupUIPositionLitegraph(assistant, containerDiv) {
         // 更新位置的函数
+        // 缓存最后一次写入 DOM 的值，未变化时跳过 style 写入
+        // 避免高节点数下每帧触发 N 次 Recalculate Style
+        const lastApplied = { sx: NaN, sy: NaN, scale: NaN, hidden: false };
+
         const updatePosition = () => {
             if (!assistant.element || !assistant.node) return;
 
             try {
                 const canvas = app.canvas;
-                // 如果canvas未初始化，延迟重试
                 if (!canvas) {
                     requestAnimationFrame(() => updatePosition());
                     return;
                 }
 
-                // 获取画布缩放比例
                 const scale = canvas.ds.scale;
 
-                // 获取节点边界
+                // 视口剔除：节点不在可见区域时直接隐藏，跳过定位计算
+                // 大工作流低缩放下 N 个节点全在视口外仍跑 updatePosition 是主要性能瓶颈
                 const [nodeX, nodeY, nodeWidth, nodeHeight] = assistant.node.getBounding();
+                const visibleArea = canvas.ds?.visible_area;
+                if (visibleArea && visibleArea[2] > 0 && visibleArea[3] > 0) {
+                    const vx = visibleArea[0], vy = visibleArea[1];
+                    const vw = visibleArea[2], vh = visibleArea[3];
+                    const intersects =
+                        nodeX + nodeWidth > vx &&
+                        nodeX < vx + vw &&
+                        nodeY + nodeHeight > vy &&
+                        nodeY < vy + vh;
+                    if (!intersects) {
+                        if (!lastApplied.hidden) {
+                            containerDiv.style.display = 'none';
+                            lastApplied.hidden = true;
+                        }
+                        return;
+                    }
+                    if (lastApplied.hidden) {
+                        containerDiv.style.display = '';
+                        lastApplied.hidden = false;
+                    }
+                }
 
-                // 计算内部偏移量（用于将小助手放在节点内部）
-                const INNER_OFFSET_X = 6; // 水平偏移量
-                const INNER_OFFSET_Y = 6; // 垂直偏移量
+                const INNER_OFFSET_X = 6;
+                const INNER_OFFSET_Y = 6;
 
-                // 计算定位点位置（节点左下角）
                 const anchorX = nodeX + INNER_OFFSET_X;
                 const anchorY = nodeY + nodeHeight - INNER_OFFSET_Y;
 
-                // 获取画布元素的边界
                 const rect = canvas.canvas.getBoundingClientRect();
-
-                // 将定位点位置转换为屏幕坐标
                 const canvasPoint = canvas.convertOffsetToCanvas([anchorX, anchorY]);
-
                 if (!canvasPoint) return;
 
-                // 计算最终的屏幕坐标（考虑画布元素的位置）
                 const screenX = canvasPoint[0] + rect.left;
                 const screenY = canvasPoint[1] + rect.top;
 
-                // 设置容器位置，使其左下角与定位点对齐
-                containerDiv.style.left = `${screenX}px`;
-                containerDiv.style.bottom = `${window.innerHeight - screenY}px`;
-                containerDiv.style.right = 'auto';
-                containerDiv.style.top = 'auto';
-
-                // 应用缩放
-                containerDiv.style.setProperty('--assistant-scale', scale);
+                // change detection：只有屏幕坐标或缩放变了才写 DOM
+                if (
+                    screenX !== lastApplied.sx ||
+                    screenY !== lastApplied.sy ||
+                    scale !== lastApplied.scale
+                ) {
+                    containerDiv.style.left = `${screenX}px`;
+                    containerDiv.style.bottom = `${window.innerHeight - screenY}px`;
+                    containerDiv.style.right = 'auto';
+                    containerDiv.style.top = 'auto';
+                    containerDiv.style.setProperty('--assistant-scale', scale);
+                    lastApplied.sx = screenX;
+                    lastApplied.sy = screenY;
+                    lastApplied.scale = scale;
+                }
 
             } catch (error) {
-                // 仅在首次出错时记录
                 if (!assistant._lastPositionError) {
                     logger.error(() => `更新小助手位置失败: ${error.message}`);
                     assistant._lastPositionError = Date.now();
@@ -2021,22 +2044,27 @@ class ImageCaption {
 
         // 监听画布变化
         if (app.canvas) {
-            // 监听画布重绘
-            // 优化：使用requestAnimationFrame在每一帧更新位置，或者直接利用 LiteGraph 的渲染循环
-            // 这里为了跟随平滑，直接在 drawBackground 钩子中更新
-            const originalDrawBackground = app.canvas.onDrawBackground;
-            const onDrawWrapper = function () {
-                const ret = originalDrawBackground?.apply(this, arguments);
-                updatePosition();
-                return ret;
-            };
-            app.canvas.onDrawBackground = onDrawWrapper;
+            // 单一全局 onDrawBackground 钩子 + 全局 updater 注册表
+            // 改之前每个 assistant 都 wrap 一次 onDrawBackground，N 个节点 = N 层嵌套调用，
+            // 大工作流每帧走 N 层包装链 → 严重卡顿。改成只 wrap 一次，迭代注册表。
+            // 同时栈式 wrap 的 cleanup 只能拆顶层，下面的永远拆不掉，会随节点累积。
+            if (!ImageCaption._globalDrawHookInstalled && app.canvas) {
+                ImageCaption._activePositionUpdaters = ImageCaption._activePositionUpdaters || new Set();
+                const origDrawBg = app.canvas.onDrawBackground;
+                const globalDrawWrapper = function () {
+                    const ret = origDrawBg?.apply(this, arguments);
+                    for (const fn of ImageCaption._activePositionUpdaters) {
+                        try { fn(); } catch (_) {}
+                    }
+                    return ret;
+                };
+                app.canvas.onDrawBackground = globalDrawWrapper;
+                ImageCaption._globalDrawHookInstalled = true;
+            }
 
-            // 添加画布重绘清理函数
+            ImageCaption._activePositionUpdaters.add(updatePosition);
             assistant._eventCleanupFunctions.push(() => {
-                if (app.canvas.onDrawBackground === onDrawWrapper) {
-                    app.canvas.onDrawBackground = originalDrawBackground;
-                }
+                ImageCaption._activePositionUpdaters?.delete(updatePosition);
             });
 
             // 监听节点移动
