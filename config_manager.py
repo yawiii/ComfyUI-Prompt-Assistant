@@ -926,7 +926,7 @@ class ConfigManager:
             self._log(f"获取用户设置失败: {str(e)}")
             return {}
 
-    def update_baidu_translate_config(self, app_id=None, secret_key=None):
+    def update_baidu_translate_config(self, app_id=None, secret_key=None, api_key=None):
         """更新百度翻译配置"""
         config = self.load_config()
         if "baidu_translate" not in config:
@@ -937,6 +937,8 @@ class ConfigManager:
             config["baidu_translate"]["app_id"] = app_id
         if secret_key is not None:
             config["baidu_translate"]["secret_key"] = secret_key
+        if api_key is not None:
+            config["baidu_translate"]["api_key"] = api_key
 
         return self.save_config(config)
 
