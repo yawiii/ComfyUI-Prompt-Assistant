@@ -22,6 +22,12 @@ Cereza69、LAOGOU-666、H、小海、foryoung365、xu...
 
 ## 📣更新
 <details>
+ <summary>[未发布]历史记录持久化到服务端： </summary>
+- 输入框历史记录现在会同步备份到插件配置目录（config/history_cache.json），浏览器清理缓存或插件异常不再导致历史丢失
+- 首次启动自动把浏览器本地已有历史一次性迁移备份到服务端
+- 服务端不可用时自动回退本地存储模式，不影响原有功能
+</details>
+<details>
  <summary>[2025-9-16]V1.2.0： </summary>
 - 新增提示词扩写节点
   
