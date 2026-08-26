@@ -4,6 +4,7 @@ from .config_manager import config_manager
 from .services.baidu import BaiduTranslateService
 from .services.llm import LLMService
 from .services.vlm import VisionService
+from .services.history_store import load_history, save_history
 import base64
 import json
 import traceback
@@ -585,4 +586,33 @@ async def vlm_analyze(request):
         return web.json_response({"success": False, "error": error_msg})
     finally:
         if request_id and request_id in ACTIVE_TASKS:
-            del ACTIVE_TASKS[request_id] 
+            del ACTIVE_TASKS[request_id]
+
+
+# ============================ 历史记录持久化 ============================
+# 历史记录由前端 localStorage 迁移到服务端 JSON 文件持久化（config/history_cache.json），
+# 避免浏览器清理缓存或插件异常导致历史丢失。
+# 前端每次变更后整体推送全量数组（与 HistoryCacheService.saveAllHistory 语义一致），
+# 服务端负责校验、限长与原子写入。
+
+@PromptServer.instance.routes.get(f'{API_PREFIX}/history')
+async def get_history_store(request):
+    """获取服务端持久化的历史记录"""
+    try:
+        return web.json_response({"data": load_history()})
+    except Exception as e:
+        print(f"{ERROR_PREFIX} 历史记录读取失败 | 错误:{str(e)}")
+        return web.json_response({"error": str(e)}, status=500)
+
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/history')
+async def post_history_store(request):
+    """整体覆盖保存历史记录"""
+    try:
+        data = await request.json()
+        payload = data.get("data", [])
+        count = save_history(payload)
+        return web.json_response({"success": True, "count": count})
+    except Exception as e:
+        print(f"{ERROR_PREFIX} 历史记录保存失败 | 错误:{str(e)}")
+        return web.json_response({"error": str(e)}, status=500) 

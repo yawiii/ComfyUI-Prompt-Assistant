@@ -111,6 +111,105 @@ class HistoryCacheService {
     static saveAllHistory(history) {
         const key = CACHE_CONFIG.HISTORY_CACHE_KEY;
         CacheService.set(key, history);
+        this._scheduleServerSync();
+    }
+
+    // ==================== 服务端持久化（防浏览器清理丢失历史） ====================
+    static serverSyncEnabled = false; // 服务端同步是否可用
+    static _syncTimer = null;         // 防抖推送定时器
+    static _unloadBound = false;      // beforeunload 兜底是否已绑定
+
+    /**
+     * 服务端历史记录 API 地址
+     */
+    static get _historyServerUrl() {
+        return `${window.location.origin}/prompt_assistant/api/history`;
+    }
+
+    /**
+     * 初始化服务端同步：
+     * 1. 服务端有数据 → 拉取到本地（服务端为准，覆盖本地 localStorage）
+     * 2. 服务端为空但本地有数据 → 一次性把本地数据备份到服务端（迁移）
+     * 3. 服务端不可用（旧版服务端/网络异常）→ 保持纯本地模式，不影响原有功能
+     */
+    static async initServerSync() {
+        try {
+            const resp = await fetch(this._historyServerUrl, { method: 'GET', cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const result = await resp.json();
+            const serverData = Array.isArray(result && result.data) ? result.data : null;
+            if (serverData === null) throw new Error('响应格式异常');
+
+            if (serverData.length > 0) {
+                // 服务端有数据：以服务端为准，恢复到本地（同时覆盖本地被清空/损坏的情况）
+                this.saveAllHistory(serverData);
+                logger.log(`历史同步 | 已从服务端恢复 ${serverData.length} 条历史`);
+            } else {
+                const local = this.getAllHistory();
+                if (local.length > 0) {
+                    // 本地有、服务端空：一次性迁移备份到服务端
+                    await this._pushToServer(local);
+                    logger.log(`历史同步 | 已将本地 ${local.length} 条历史备份到服务端`);
+                }
+            }
+            this.serverSyncEnabled = true;
+            this._bindUnloadFlush();
+            logger.log('历史同步 | 服务端持久化已启用');
+        } catch (error) {
+            this.serverSyncEnabled = false;
+            logger.warn(`历史同步 | 服务端不可用，使用本地存储模式 | 错误:${error.message}`);
+        }
+    }
+
+    /**
+     * 全量推送历史到服务端
+     */
+    static _pushToServer(history) {
+        return fetch(this._historyServerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: history }),
+            keepalive: true
+        }).then(resp => {
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return resp.json();
+        });
+    }
+
+    /**
+     * 变更后防抖调度全量同步到服务端（600ms 内合并多次写入）
+     */
+    static _scheduleServerSync() {
+        if (!this.serverSyncEnabled) return;
+        if (this._syncTimer) clearTimeout(this._syncTimer);
+        this._syncTimer = setTimeout(() => {
+            this._syncTimer = null;
+            const history = this.getAllHistory();
+            this._pushToServer(history).catch(error => {
+                logger.warn(`历史同步 | 推送失败 | 错误:${error.message}`);
+            });
+        }, 600);
+    }
+
+    /**
+     * 页面关闭前兜底推送一次（防止最后一次变更未同步）
+     */
+    static _bindUnloadFlush() {
+        if (this._unloadBound) return;
+        this._unloadBound = true;
+        window.addEventListener('beforeunload', () => {
+            if (this._syncTimer) clearTimeout(this._syncTimer);
+            if (this.serverSyncEnabled) {
+                try {
+                    fetch(this._historyServerUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ data: this.getAllHistory() }),
+                        keepalive: true
+                    });
+                } catch (e) { /* 页面即将卸载，忽略异常 */ }
+            }
+        });
     }
 
     /**

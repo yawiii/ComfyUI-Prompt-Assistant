@@ -1,0 +1,4 @@
+# 运行期数据：服务端持久化的历史记录（随使用自动生成，不应纳入版本管理）
+config/history_cache.json
+config/history_cache.json.tmp
+config/history_cache.json.corrupted

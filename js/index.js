@@ -49,6 +49,9 @@ app.registerExtension({
             // 初始化自动翻译拦截器（独立于提示词小助手）
             // ensureAutoTranslateInterceptorInstalled();
 
+            // 初始化历史记录服务端同步（失败时自动回退本地存储模式）
+            await HistoryCacheService.initServerSync();
+
             // 初始化提示词小助手（内部会处理版本号检查和总开关状态）
             await promptAssistant.initialize();
 
