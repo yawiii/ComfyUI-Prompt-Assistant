@@ -17,6 +17,7 @@ import { nodeHelpTranslator } from './modules/nodeHelpTranslator.js';
 import { nodeMountService, RENDER_MODE } from './services/NodeMountService.js';
 import { tUI } from "./utils/uiI18n.js";
 import './node/captionFrame.js'; // 导入视频手动抽帧功能
+import './node/dynamicImageInputs.js'; // 图像反推节点动态多图输入（最多9图）
 
 
 
