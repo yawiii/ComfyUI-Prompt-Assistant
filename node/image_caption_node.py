@@ -9,6 +9,7 @@ V3 迁移说明：
 
 功能说明：
     - 支持单张图像输入
+    - 支持多图输入（image2~image9 可选）：所有已连接的图像合并进一次 VLM 请求，输出一条综合描述
     - 支持 IMAGE batch 输入：逐帧独立调用 VLM，输出合并文本 + 字符串列表
     - 两个输出端口：
         · caption_text  (STRING)      - 所有帧结果用 "\\n---\\n" 合并的完整文本
@@ -73,7 +74,47 @@ class ImageCaptionNode(VLMNodeBase, io.ComfyNode):
             inputs=[
                 io.Image.Input(
                     "image",
-                    tooltip="The image to analyze. Supports single image or IMAGE batch (processes each frame independently)"
+                    tooltip="The image to analyze. Supports single image or IMAGE batch (processes each frame independently). Additional optional inputs image2~image9 are merged into ONE multi-image request"
+                ),
+                io.Image.Input(
+                    "image2",
+                    optional=True,
+                    tooltip="Optional extra image. When connected, all images are sent to the VLM in ONE request and described together"
+                ),
+                io.Image.Input(
+                    "image3",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image4",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image5",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image6",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image7",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image8",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
+                ),
+                io.Image.Input(
+                    "image9",
+                    optional=True,
+                    tooltip="Optional extra image (merged into one multi-image request)"
                 ),
                 io.Combo.Input(
                     "rule",
@@ -138,7 +179,9 @@ class ImageCaptionNode(VLMNodeBase, io.ComfyNode):
     @classmethod
     def fingerprint_inputs(
         cls,
-        image=None, rule=None, custom_rule=None, custom_rule_content=None,
+        image=None, image2=None, image3=None, image4=None, image5=None,
+        image6=None, image7=None, image8=None, image9=None,
+        rule=None, custom_rule=None, custom_rule_content=None,
         user_prompt=None, vlm_service=None, ollama_auto_unload=None, seed=None
     ):
         """替代 V1 IS_CHANGED"""
@@ -146,9 +189,13 @@ class ImageCaptionNode(VLMNodeBase, io.ComfyNode):
         temp_rule_hash = hashlib.md5((custom_rule_content or "").encode('utf-8')).hexdigest()
         user_hint_hash = hashlib.md5((user_prompt or "").encode('utf-8')).hexdigest()
         img_hash = cls._compute_image_hash(image)
+        extra_img_hashes = tuple(
+            cls._compute_image_hash(img) for img in (image2, image3, image4, image5, image6, image7, image8, image9)
+        )
 
         return hash((
             img_hash,
+            extra_img_hashes,
             rule,
             bool(custom_rule),
             temp_rule_hash,
@@ -243,7 +290,10 @@ class ImageCaptionNode(VLMNodeBase, io.ComfyNode):
     def execute(
         cls,
         image, rule, custom_rule, custom_rule_content,
-        user_prompt, vlm_service, ollama_auto_unload, seed=None
+        user_prompt, vlm_service, ollama_auto_unload,
+        image2=None, image3=None, image4=None, image5=None,
+        image6=None, image7=None, image8=None, image9=None,
+        seed=None
     ):
         unique_id = cls.hidden.unique_id
         request_id = None
@@ -334,6 +384,80 @@ class ImageCaptionNode(VLMNodeBase, io.ComfyNode):
             # 3. 分析图像：支持 batch（逐帧独立调用）
             # ------------------------------------------------------------------
             request_id = generate_request_id("vlm", None, unique_id)
+
+            # ------------------------------------------------------------------
+            # 3a. 多图模式：image2~image9 任一接入时，所有图像合并进一次 VLM 请求
+            # ------------------------------------------------------------------
+            extra_images = [
+                img for img in (image2, image3, image4, image5, image6, image7, image8, image9)
+                if img is not None
+            ]
+            if extra_images:
+                # 展开所有输入的帧（支持每个输入口本身是 batch）
+                frames = []
+                for tensor in (image, *extra_images):
+                    if len(tensor.shape) == 4:
+                        for i in range(tensor.shape[0]):
+                            frames.append(tensor[i])
+                    else:
+                        frames.append(tensor)
+
+                # 按模型多图上限截断（服务层还有最后防线）
+                from ..utils.common import get_model_max_images
+                max_images = get_model_max_images(provider_config.get('model', ''))
+                original_count = len(frames)
+                if original_count > max_images:
+                    frames = frames[:max_images]
+                    print(
+                        f"{cls.LOG_PREFIX} ⚠️ 多图反推 | 图片数 {original_count} "
+                        f"超过模型上限 {max_images}，已截断，忽略 {original_count - max_images} 张"
+                    )
+
+                images_data = [cls._image_to_base64(f) for f in frames]
+
+                model_full_name = provider_config.get('model')
+                thinking_extra = (
+                    build_thinking_suppression(service_id, model_full_name)
+                    if service.get('disable_thinking', True) else None
+                )
+                model_display = format_model_with_thinking(model_full_name, bool(thinking_extra))
+                service_display_name = service.get('name', service_id)
+
+                log_prepare(
+                    TASK_IMAGE_CAPTION, request_id, SOURCE_NODE,
+                    service_display_name, model_display,
+                    f"{rule_name} [Multi {len(images_data)} images]"
+                )
+
+                result = cls._run_vision_task(
+                    VisionService.analyze_images,
+                    service_id,
+                    images_data=images_data,
+                    prompt_content=prompt_to_send,
+                    request_id=request_id,
+                    custom_provider=service_id,
+                    custom_provider_config=provider_config,
+                    task_type=TASK_IMAGE_CAPTION,
+                    source=SOURCE_NODE
+                )
+
+                if result and result.get('success'):
+                    data = result.get('data', {})
+                    caption_text = data.get('description', data.get('caption', '')).strip()
+                    if not caption_text:
+                        error_msg = 'API returned empty result'
+                        log_error(TASK_IMAGE_CAPTION, request_id, error_msg, source=SOURCE_NODE)
+                        raise RuntimeError(f"Analysis failed: {error_msg}")
+                    return io.NodeOutput(caption_text, [caption_text])
+                else:
+                    error_msg = (
+                        result.get('error', 'Unknown error') if result
+                        else 'No result returned'
+                    )
+                    if error_msg == "任务被中断":
+                        raise InterruptProcessingException()
+                    log_error(TASK_IMAGE_CAPTION, request_id, error_msg, source=SOURCE_NODE)
+                    raise RuntimeError(f"Analysis failed: {error_msg}")
 
             # 检查是否为多帧 batch [N, H, W, C] 且 N > 1
             if len(image.shape) == 4 and image.shape[0] > 1:
