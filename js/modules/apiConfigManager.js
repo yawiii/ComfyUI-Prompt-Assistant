@@ -531,6 +531,13 @@ class APIConfigManager {
             confirmLabel: '创建',
             cancelLabel: '取消',
             renderFormContent: (formContainer) => {
+                const typeInput = createSelectGroup('服务类型', [
+                    { value: 'openai_compatible', text: 'OpenAI 兼容 API' },
+                    { value: 'codex_cli', text: 'Codex CLI（本机）' }
+                ], 'openai_compatible');
+                typeInput.select.dataset.fieldName = 'serviceType';
+                formContainer.appendChild(typeInput.group);
+
                 // 服务商名称输入框
                 const nameInput = createInputGroup('服务商名称', '请输入服务商名称');
                 nameInput.input.value = tUI('新服务商');
@@ -545,10 +552,14 @@ class APIConfigManager {
             onConfirm: async (formContainer) => {
                 try {
                     // 获取表单数据
+                    const typeInput = formContainer.querySelector('[data-field-name="serviceType"]');
                     const nameInput = formContainer.querySelector('[data-field-name="serviceName"]');
                     const descInput = formContainer.querySelector('[data-field-name="serviceDescription"]');
 
-                    const serviceName = nameInput.value.trim();
+                    const serviceType = typeInput.value;
+                    const enteredName = nameInput.value.trim();
+                    const serviceName = serviceType === 'codex_cli' && enteredName === tUI('新服务商')
+                        ? 'Codex CLI' : enteredName;
                     const serviceDescription = descInput.value.trim();
 
                     if (!serviceName) {
@@ -565,10 +576,10 @@ class APIConfigManager {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            type: 'openai_compatible',
+                            type: serviceType,
                             name: serviceName,
                             description: serviceDescription,
-                            base_url: 'https://api.example.com/v1',
+                            base_url: serviceType === 'codex_cli' ? '' : 'https://api.example.com/v1',
                             api_key: ''
                         })
                     });
@@ -1013,6 +1024,14 @@ class APIConfigManager {
 
         card.appendChild(titleSection);
 
+        if (service.type === 'codex_cli') {
+            const hint = document.createElement('p');
+            hint.textContent = tUI('使用本机 Codex CLI 的登录状态，无需 API Key。自动查找 Windows PATH 和 Codex Desktop；default 使用 CLI 默认模型。');
+            card.appendChild(hint);
+            card.appendChild(this._createModelSection(service, 'llm'));
+            return card;
+        }
+
         // 基本信息
         const baseUrlInput = createInputGroup('Base URL', 'https://api.example.com/v1');
         baseUrlInput.input.value = service.base_url || '';
@@ -1333,7 +1352,9 @@ class APIConfigManager {
 
         createTooltip({
             target: modelHintIcon,
-            content: '建议优先选择非思考模型或指令型（-instruct）模型，以减少思维链输出、截断和响应不稳定的问题。',
+            content: service.type === 'codex_cli'
+                ? tUI('default 使用 Codex CLI 默认模型；其他模型名会传给 codex exec --model。')
+                : '建议优先选择非思考模型或指令型（-instruct）模型，以减少思维链输出、截断和响应不稳定的问题。',
             position: 'top'
         });
 
@@ -1453,7 +1474,7 @@ class APIConfigManager {
             const currentModel = models.find(m => m.name === model.name);
             const isDefault = currentModel ? currentModel.is_default : false;
 
-            return [
+            const items = [
                 {
                     label: '设为默认模型',
                     icon: 'pi-star',
@@ -1461,16 +1482,18 @@ class APIConfigManager {
                     onClick: () => {
                         this._setDefaultModel(service, modelType, model.name, tag);
                     }
-                },
-                { separator: true }, // 分隔线
-                {
+                }
+            ];
+            if (service.type !== 'codex_cli') {
+                items.push({ separator: true }, {
                     label: '修改模型参数设置',
                     icon: 'pi-cog',
                     onClick: () => {
                         this._selectModelForEdit(service, modelType, model.name, tag);
                     }
-                }
-            ];
+                });
+            }
+            return items;
         };
 
         createContextMenu({

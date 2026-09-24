@@ -16,6 +16,7 @@ import hashlib
 from comfy.model_management import InterruptProcessingException
 from comfy_api.latest import io
 
+from ..services.codex_cli import CodexCLIService
 from ..services.llm import LLMService
 from ..utils.common import (
     format_api_error, format_model_with_thinking, generate_request_id,
@@ -141,6 +142,18 @@ class PromptExpand(LLMNodeBase, io.ComfyNode):
                     placeholder="Input text to enhance...",
                     tooltip="Optional input text",
                 ),
+                io.Combo.Input(
+                    "codex_model",
+                    options=CodexCLIService.get_model_options(),
+                    default=CodexCLIService.SERVICE_MODEL,
+                    tooltip="Codex CLI only. Override the model selected by the service.",
+                ),
+                io.Combo.Input(
+                    "codex_reasoning_effort",
+                    options=CodexCLIService.get_effort_options(),
+                    default=CodexCLIService.DEFAULT_EFFORT,
+                    tooltip="Codex CLI only. Use the model default or choose a reasoning effort.",
+                ),
             ],
             outputs=[
                 io.String.Output("enhanced_text"),
@@ -153,7 +166,9 @@ class PromptExpand(LLMNodeBase, io.ComfyNode):
         cls,
         rule=None, custom_rule=None, custom_rule_content=None,
         user_prompt=None, llm_service=None, ollama_auto_unload=None,
-        seed=None, source_text=None
+        seed=None, source_text=None,
+        codex_model=CodexCLIService.SERVICE_MODEL,
+        codex_reasoning_effort=CodexCLIService.DEFAULT_EFFORT
     ):
         """
         替代 V1 IS_CHANGED，只在输入内容真正变化时才触发重新执行
@@ -172,6 +187,8 @@ class PromptExpand(LLMNodeBase, io.ComfyNode):
             bool(ollama_auto_unload),
             seed,
             text_hash,
+            codex_model,
+            codex_reasoning_effort,
         ))
         return input_hash
 
@@ -179,7 +196,9 @@ class PromptExpand(LLMNodeBase, io.ComfyNode):
     def execute(
         cls,
         rule, custom_rule, custom_rule_content, user_prompt,
-        llm_service, ollama_auto_unload, seed=None, source_text=None
+        llm_service, ollama_auto_unload, seed=None, source_text=None,
+        codex_model=CodexCLIService.SERVICE_MODEL,
+        codex_reasoning_effort=CodexCLIService.DEFAULT_EFFORT
     ):
         """
         增强/扩写文本函数（V3 classmethod 版本）
@@ -267,6 +286,12 @@ class PromptExpand(LLMNodeBase, io.ComfyNode):
                 'max_tokens': target_model.get('max_tokens', 1000),
                 'top_p': target_model.get('top_p', 0.9),
             }
+
+            if service.get('type') == 'codex_cli':
+                if codex_model != CodexCLIService.SERVICE_MODEL:
+                    provider_config['model'] = codex_model
+                if codex_reasoning_effort != CodexCLIService.DEFAULT_EFFORT:
+                    provider_config['codex_reasoning_effort'] = codex_reasoning_effort
 
             # Ollama 特殊处理：添加 auto_unload 配置
             if service.get('type') == 'ollama':

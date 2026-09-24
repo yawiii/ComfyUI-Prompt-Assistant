@@ -53,7 +53,7 @@ def get_models_from_service(base_url: str, api_key: str, service_type: str) -> D
     参数:
         base_url: API基础URL
         api_key: API密钥
-        service_type: 服务类型 ('openai_compatible', 'ollama', 'zhipu')
+        service_type: 服务类型 ('openai_compatible', 'ollama', 'zhipu', 'codex_cli')
     
     返回:
         Dict: {
@@ -63,6 +63,9 @@ def get_models_from_service(base_url: str, api_key: str, service_type: str) -> D
         }
     """
     try:
+        if service_type == 'codex_cli':
+            return {"success": True, "models": {"llm": ["default"], "vlm": []}}
+
         # 检查必需参数
         if not base_url:
             return {

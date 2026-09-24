@@ -319,6 +319,28 @@ class LLMService(OpenAICompatibleService):
             }
             messages = [lang_message, system_message, {"role": "user", "content": prompt}]
 
+            if service and service.get('type') == 'codex_cli':
+                from .codex_cli import CodexCLIService
+
+                result = await CodexCLIService.generate(
+                    model=model,
+                    messages=[system_message, {"role": "user", "content": prompt}],
+                    reasoning_effort=(custom_provider_config or {}).get('codex_reasoning_effort'),
+                    stream_callback=stream_callback,
+                    request_id=request_id,
+                    cancel_event=cancel_event,
+                    task_type=task_type or TASK_EXPAND,
+                    source=source,
+                )
+                if not result["success"]:
+                    return result
+                success, content = postprocess_model_output(
+                    result["content"], filter_thinking_output=True
+                )
+                if not success:
+                    return {"success": False, "error": "Codex CLI 未返回有效文本"}
+                return {"success": True, "data": {"original": prompt, "expanded": content}}
+
             # 判断是否走原生 Ollama API：必须是 ollama 类型，且 base_url 不以 /v1 结尾或包含 /v1/
             is_native_ollama = False
             if service and service.get('type') == 'ollama':
@@ -560,6 +582,28 @@ class LLMService(OpenAICompatibleService):
                 {"role": "system", "content": translate_instruction},
                 {"role": "user", "content": text}
             ]
+
+            if service and service.get('type') == 'codex_cli':
+                from .codex_cli import CodexCLIService
+
+                result = await CodexCLIService.generate(
+                    model=model,
+                    messages=messages,
+                    reasoning_effort=(custom_provider_config or {}).get('codex_reasoning_effort'),
+                    stream_callback=stream_callback,
+                    request_id=request_id,
+                    cancel_event=cancel_event,
+                    task_type=task_type or TASK_TRANSLATE,
+                    source=source,
+                )
+                if not result["success"]:
+                    return result
+                success, content = postprocess_model_output(
+                    result["content"], filter_thinking_output=True
+                )
+                if not success:
+                    return {"success": False, "error": "Codex CLI 未返回有效文本"}
+                return {"success": True, "data": {"original": text, "translated": content}}
 
 
             # 判断是否走原生 Ollama API：必须是 ollama 类型，且 base_url 不以 /v1 结尾或包含 /v1/

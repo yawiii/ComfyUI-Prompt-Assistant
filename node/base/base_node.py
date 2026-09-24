@@ -206,7 +206,7 @@ class BaseNode:
             return True
 
         service_type = str(service.get('type', '') or '').strip().lower()
-        if service_type == 'ollama':
+        if service_type in ('ollama', 'codex_cli'):
             return False
 
         for key in ('requires_api_key', 'api_key_required', 'auth_required'):

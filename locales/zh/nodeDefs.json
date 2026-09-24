@@ -34,6 +34,29 @@
             "seed": {
                 "name": "随机种子",
                 "tooltip": "控制生成的随机性。选择非固定模式可强制节点重新执行"
+            },
+            "codex_model": {
+                "name": "Codex 模型",
+                "tooltip": "仅在选择 Codex CLI 服务时生效",
+                "options": {
+                    "Follow service": "跟随服务所选模型",
+                    "default": "CLI 默认模型"
+                }
+            },
+            "codex_reasoning_effort": {
+                "name": "思考强度",
+                "tooltip": "仅在选择 Codex CLI 服务时生效",
+                "options": {
+                    "Model default": "模型默认",
+                    "none": "无",
+                    "minimal": "极低",
+                    "low": "低",
+                    "medium": "中",
+                    "high": "高",
+                    "xhigh": "超高",
+                    "max": "最大",
+                    "ultra": "Ultra"
+                }
             }
         },
         "outputs": {
@@ -118,6 +141,29 @@
             "seed": {
                 "name": "随机种子",
                 "tooltip": "控制生成的随机性。选择非固定模式可强制节点重新执行"
+            },
+            "codex_model": {
+                "name": "Codex 模型",
+                "tooltip": "仅在选择 Codex CLI 服务时生效",
+                "options": {
+                    "Follow service": "跟随服务所选模型",
+                    "default": "CLI 默认模型"
+                }
+            },
+            "codex_reasoning_effort": {
+                "name": "思考强度",
+                "tooltip": "仅在选择 Codex CLI 服务时生效",
+                "options": {
+                    "Model default": "模型默认",
+                    "none": "无",
+                    "minimal": "极低",
+                    "low": "低",
+                    "medium": "中",
+                    "high": "高",
+                    "xhigh": "超高",
+                    "max": "最大",
+                    "ultra": "Ultra"
+                }
             }
         },
         "outputs": {

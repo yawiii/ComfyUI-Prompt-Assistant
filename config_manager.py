@@ -1159,7 +1159,7 @@ class ConfigManager:
         创建新的服务商
         
         参数:
-            service_type: 服务类型 ('openai_compatible' 或 'ollama')
+            service_type: 服务类型 ('openai_compatible'、'ollama' 或 'codex_cli')
             name: 服务商名称（如果为空，自动生成）
             base_url: Base URL
             api_key: API Key（明文存储）
@@ -1203,6 +1203,11 @@ class ConfigManager:
             # Ollama特有配置
             if service_type == "ollama":
                 new_service["auto_unload"] = True
+            elif service_type == "codex_cli":
+                new_service["requires_api_key"] = False
+                new_service["disable_thinking"] = False
+                new_service["enable_advanced_params"] = False
+                new_service["llm_models"] = [{"name": "default", "is_default": True}]
             
             # 添加到配置
             if 'model_services' not in config:
@@ -1246,6 +1251,10 @@ class ConfigManager:
             "openai_compatible": {
                 "name_prefix": "通用服务",
                 "id_prefix": "service"
+            },
+            "codex_cli": {
+                "name_prefix": "Codex CLI",
+                "id_prefix": "codex"
             }
         }
         
