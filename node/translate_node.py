@@ -19,6 +19,7 @@ from comfy.model_management import InterruptProcessingException
 from comfy_api.latest import io
 
 from ..services.llm import LLMService
+from ..services.codex_cli import CodexCLIService
 from ..services.baidu import BaiduTranslateService
 from ..utils.common import (
     format_api_error, format_model_with_thinking, generate_request_id,
@@ -81,6 +82,18 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
                     max=0xffffffffffffffff,
                     control_after_generate=True,
                 ),
+                io.Combo.Input(
+                    "codex_model",
+                    options=CodexCLIService.get_model_options(),
+                    default=CodexCLIService.SERVICE_MODEL,
+                    tooltip="Codex CLI only. Override the model selected by the service.",
+                ),
+                io.Combo.Input(
+                    "codex_reasoning_effort",
+                    options=CodexCLIService.get_effort_options(),
+                    default=CodexCLIService.DEFAULT_EFFORT,
+                    tooltip="Codex CLI only. Use the model default or choose a reasoning effort.",
+                ),
             ],
             outputs=[
                 io.String.Output("translated_text"),
@@ -92,7 +105,9 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
     def fingerprint_inputs(
         cls,
         source_text=None, target_language=None, translate_service=None,
-        ollama_auto_unload=None, seed=None
+        ollama_auto_unload=None, seed=None,
+        codex_model=CodexCLIService.SERVICE_MODEL,
+        codex_reasoning_effort=CodexCLIService.DEFAULT_EFFORT
     ):
         """
         替代 V1 IS_CHANGED，只在输入内容真正变化时才触发重新执行
@@ -107,7 +122,9 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
             target_language,
             translate_service,
             bool(ollama_auto_unload),
-            seed
+            seed,
+            codex_model,
+            codex_reasoning_effort,
         ))
         return input_hash
 
@@ -159,7 +176,7 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
         return request_id, result
 
     @classmethod
-    def _translate_with_llm(cls, text, from_lang, to_lang, service_id, model_name, service, service_display_name, from_lang_name, to_lang_name, auto_unload, unique_id):
+    def _translate_with_llm(cls, text, from_lang, to_lang, service_id, model_name, service, service_display_name, from_lang_name, to_lang_name, auto_unload, unique_id, codex_model, codex_reasoning_effort):
         """使用 LLM 翻译服务"""
         # ---构建 provider_config---
         llm_models = service.get('llm_models', [])
@@ -186,6 +203,12 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
             'max_tokens': target_model.get('max_tokens', 1000),
             'top_p': target_model.get('top_p', 0.9),
         }
+
+        if service.get('type') == 'codex_cli':
+            if codex_model != CodexCLIService.SERVICE_MODEL:
+                provider_config['model'] = codex_model
+            if codex_reasoning_effort != CodexCLIService.DEFAULT_EFFORT:
+                provider_config['codex_reasoning_effort'] = codex_reasoning_effort
 
         # Ollama 特殊处理：添加 auto_unload 配置
         if service.get('type') == 'ollama':
@@ -232,7 +255,11 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
         return request_id, result
 
     @classmethod
-    def execute(cls, source_text, target_language, translate_service, ollama_auto_unload, seed=None):
+    def execute(
+        cls, source_text, target_language, translate_service, ollama_auto_unload,
+        seed=None, codex_model=CodexCLIService.SERVICE_MODEL,
+        codex_reasoning_effort=CodexCLIService.DEFAULT_EFFORT
+    ):
         """
         翻译文本函数（V3 classmethod 版本）
         通过 cls.hidden.unique_id 访问节点唯一 ID
@@ -291,7 +318,7 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
                     source_text, detected_lang, to_lang,
                     service_id, model_name, service,
                     translate_service, from_lang_name, to_lang_name,
-                    ollama_auto_unload, unique_id
+                    ollama_auto_unload, unique_id, codex_model, codex_reasoning_effort
                 )
 
             if result and result.get('success'):

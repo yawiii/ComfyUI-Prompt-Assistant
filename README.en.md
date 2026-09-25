@@ -358,5 +358,13 @@ You can add custom providers or use built-in ones.
 * **xFlow-API Aggregation**: [xFlow API Portal](https://api.xflow.cc/register?aff=Z063)
   `Aggregates various models (Gemini, Grok, ChatGPT...) with a single API key; no networking issues.`
 
+### Local Codex CLI
+
+In the API configuration window, click “+” and choose “Codex CLI (local)” as the service type. Select it for prompt enhancement, title extraction, or translation. Image and video captioning continue to use a vision service. **default** uses the Codex CLI built-in default model; you can add an exact model name supported by your CLI.
+
+When Codex CLI is selected in a Prompt Enhance or Prompt Translate node, two controls appear for the model and reasoning effort. The model can follow the service configuration or be overridden for that node. “default” uses the CLI default model, and “Model default” keeps the selected model's default reasoning effort. The controls are hidden for other services.
+
+The ComfyUI backend looks for a signed-in Codex command on its process PATH and the current Windows user/system PATH, then checks the local Codex Desktop installation. If neither location works, set **PROMPT_ASSISTANT_CODEX_PATH** to the full path of the Codex executable before starting ComfyUI. Each request runs a one-shot Codex exec in a temporary directory with a read-only sandbox and a five-minute timeout. No API key is stored in the plugin. Running the CLI locally does not imply offline model inference.
+
 ## **🎀 Acknowledgments**
 Special thanks to our community for V2.0.0 rule templates: Adan, CJL, Normandy

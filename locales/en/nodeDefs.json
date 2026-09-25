@@ -34,6 +34,21 @@
             "seed": {
                 "name": "Seed",
                 "tooltip": "Controls randomness of generation. Select non-fixed mode to force re-execution"
+            },
+            "codex_model": {
+                "name": "Codex Model",
+                "tooltip": "Only applies when a Codex CLI service is selected",
+                "options": {
+                    "Follow service": "Follow service model",
+                    "default": "CLI default model"
+                }
+            },
+            "codex_reasoning_effort": {
+                "name": "Reasoning Effort",
+                "tooltip": "Only applies when a Codex CLI service is selected",
+                "options": {
+                    "Model default": "Model default"
+                }
             }
         },
         "outputs": {
@@ -118,6 +133,21 @@
             "seed": {
                 "name": "Seed",
                 "tooltip": "Controls randomness of generation. Select non-fixed mode to force re-execution"
+            },
+            "codex_model": {
+                "name": "Codex Model",
+                "tooltip": "Only applies when a Codex CLI service is selected",
+                "options": {
+                    "Follow service": "Follow service model",
+                    "default": "CLI default model"
+                }
+            },
+            "codex_reasoning_effort": {
+                "name": "Reasoning Effort",
+                "tooltip": "Only applies when a Codex CLI service is selected",
+                "options": {
+                    "Model default": "Model default"
+                }
             }
         },
         "outputs": {
