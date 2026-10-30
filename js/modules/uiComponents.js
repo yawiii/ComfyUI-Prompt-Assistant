@@ -15,15 +15,51 @@ import { tUI, localizeElement, observeLocalizedMutations } from "../utils/uiI18n
  */
 function getComfyUIDialogZIndex() {
     // ComfyUI 使用 PrimeVue，设置弹窗的类名是 .p-dialog
-    const comfyDialog = document.querySelector('.p-dialog');
-    if (comfyDialog) {
-        const zIndex = parseInt(window.getComputedStyle(comfyDialog).zIndex, 10);
-        if (!isNaN(zIndex)) {
-            return zIndex;
+    // 页面上可能同时存在多个对话框，取最高的那个，否则会算低而排在别的对话框之下
+    let maxZIndex = 0;
+    document.querySelectorAll('.p-dialog').forEach(dialog => {
+        const zIndex = parseInt(window.getComputedStyle(dialog).zIndex, 10);
+        if (!isNaN(zIndex) && zIndex > maxZIndex) {
+            maxZIndex = zIndex;
         }
+    });
+    if (maxZIndex > 0) {
+        return maxZIndex;
     }
     // 如果没有找到 ComfyUI 弹窗，返回 CSS 变量定义的基础值
     return 10200;
+}
+
+/**
+ * 把浮层挂到 ComfyUI 当前的对话框容器内
+ * 新版前端的模态层（reka-ui）会把 body 下其它元素持续标记为 pointer-events: none，
+ * 浮层只有成为对话框内容的一部分才能正常接收鼠标操作；没有打开中的对话框时回落到 body
+ */
+function appendToModalHost(element) {
+    const hosts = document.querySelectorAll('[role="dialog"]');
+    const host = hosts.length ? hosts[hosts.length - 1] : document.body;
+    host.appendChild(element);
+}
+
+// 插件自身的浮动窗口（标签/历史窗口、按钮菜单等），设置弹窗必须盖在它们之上
+const PLUGIN_FLOATING_SELECTORS = ['.popup_container', '.pa-context-menu', '.button-submenu'];
+
+/**
+ * 获取插件浮动窗口中最高的 z-index
+ * 这些窗口是 fixed 定位并直接挂在 body 上的，设置弹窗层级低于它们时会被挡住鼠标操作
+ * @returns {number} 最高层级，没有浮动窗口时返回 0
+ */
+function getPluginFloatingMaxZIndex() {
+    let maxZIndex = 0;
+    PLUGIN_FLOATING_SELECTORS.forEach(selector => {
+        document.querySelectorAll(selector).forEach(element => {
+            const zIndex = parseInt(window.getComputedStyle(element).zIndex, 10);
+            if (!isNaN(zIndex) && zIndex > maxZIndex) {
+                maxZIndex = zIndex;
+            }
+        });
+    });
+    return maxZIndex;
 }
 
 /**
@@ -65,7 +101,7 @@ export function createSettingsDialog(options) {
             // 创建遮罩层
             overlay = document.createElement('div');
             overlay.className = 'settings-modal-overlay';
-            document.body.appendChild(overlay);
+            appendToModalHost(overlay);
         }
 
 
@@ -408,16 +444,18 @@ export function createSettingsDialog(options) {
             modal.appendChild(footer);
         }
 
-        // 动态计算 z-index，确保始终在 ComfyUI 弹窗之上
+        // 动态计算 z-index，确保始终在 ComfyUI 弹窗和插件自身浮动窗口之上
         // 必须在 appendChild 之前设置，否则动画起始帧会使用 CSS 静态值
-        const baseZIndex = getComfyUIDialogZIndex() + 10;
+        const baseZIndex = Math.max(getComfyUIDialogZIndex(), getPluginFloatingMaxZIndex(), 10200) + 10;
         modal.style.zIndex = baseZIndex;
+        // 弹窗内部的下拉、右键菜单等浮层都基于这个基座计算，必须同步抬高
+        document.documentElement.style.setProperty('--settings-modal-z-index', String(baseZIndex));
         if (overlay) {
             overlay.style.zIndex = baseZIndex - 1;
         }
 
         // 显示弹窗和遮罩层
-        document.body.appendChild(modal);
+        appendToModalHost(modal);
 
         // 添加显示动画
         requestAnimationFrame(() => {
@@ -791,7 +829,7 @@ export function createSelectGroup(label, options, initialValue = null, config = 
         isOpen = true;
 
         // 将面板临时附加到 body 上以避免裁切
-        document.body.appendChild(dropdownPanel);
+        appendToModalHost(dropdownPanel);
 
         // 计算下拉框相对于视口的位置
         const rect = dropdownContainer.getBoundingClientRect();
@@ -1017,7 +1055,7 @@ export function createComboBoxGroup(label, options = [], initialValue = '', conf
         if (isOpen) return;
         isOpen = true;
 
-        document.body.appendChild(dropdownPanel);
+        appendToModalHost(dropdownPanel);
 
         const rect = comboContainer.getBoundingClientRect();
         dropdownPanel.style.position = 'fixed';
@@ -1587,7 +1625,7 @@ export function createConfirmPopup(options) {
     };
 
     // 将气泡框添加到 body
-    document.body.appendChild(popup);
+    appendToModalHost(popup);
     localizeElement(popup);
 
     // 定位气泡框
@@ -1714,7 +1752,7 @@ export function showContextMenu(options) {
     });
 
     menu.appendChild(menuList);
-    document.body.appendChild(menu);
+    appendToModalHost(menu);
 
     // 定位菜单
     const menuRect = menu.getBoundingClientRect();
@@ -1821,7 +1859,7 @@ export function createTooltip(options) {
         arrow.className = 'pa-tooltip-arrow';
         tooltip.appendChild(arrow);
 
-        document.body.appendChild(tooltip);
+        appendToModalHost(tooltip);
     };
 
     // 定位 tooltip
@@ -2142,7 +2180,7 @@ export function createMultiSelectListbox(options) {
     `;
 
     overlay.appendChild(listbox);
-    document.body.appendChild(overlay);
+    appendToModalHost(overlay);
     localizeElement(listbox);
     const stopListboxLocalization = observeLocalizedMutations(listbox);
 
@@ -2269,7 +2307,7 @@ export function createSplitButton(options) {
     menuList.className = 'pa-context-menu-list';
     menuList.setAttribute('role', 'menu');
     menuPanel.appendChild(menuList);
-    document.body.appendChild(menuPanel);
+    appendToModalHost(menuPanel);
 
     let currentItems = items;
     let isOpen = false;
@@ -2334,7 +2372,7 @@ export function createSplitButton(options) {
             });
 
             submenuPanel.appendChild(submenuList);
-            document.body.appendChild(submenuPanel);
+            appendToModalHost(submenuPanel);
 
             // 将子菜单面板添加到列表中，用于关闭时清理
             submenuPanels.push(submenuPanel);

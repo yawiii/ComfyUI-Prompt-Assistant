@@ -26,12 +26,134 @@
  */
 :root {
     --settings-modal-z-index: 10200;
-    --settings-overlay-z-index: 10199;
-    --settings-dropdown-z-index: 10205;
-    --settings-context-menu-z-index: 10215;
-    --settings-multi-listbox-z-index: 10220;
-    --settings-confirm-popup-z-index: 10225;
-    --settings-tooltip-z-index: 10230;
+    /* 弹窗内部的浮层跟随弹窗基座，基座会被 uiComponents.js 按实际遮挡情况抬高 */
+    --settings-overlay-z-index: calc(var(--settings-modal-z-index) - 1);
+    --settings-dropdown-z-index: calc(var(--settings-modal-z-index) + 5);
+    --settings-context-menu-z-index: calc(var(--settings-modal-z-index) + 15);
+    --settings-multi-listbox-z-index: calc(var(--settings-modal-z-index) + 20);
+    --settings-confirm-popup-z-index: calc(var(--settings-modal-z-index) + 25);
+    --settings-tooltip-z-index: calc(var(--settings-modal-z-index) + 30);
+}
+
+/* ---主题变量补位（新版 ComfyUI 前端兼容）---
+ * 本文件大量使用 PrimeVue 的 --p-* 语义变量。新版前端（comfyui-frontend-package
+ * 1.5x 起）不再把这些变量注入到 :root，缺少它们时 background-color、border 等
+ * 声明会被整条丢弃（表现为弹窗透明、无边框）。这里统一补一份，取值全部跟随
+ * ComfyUI 现有的主题变量，深/浅色主题都能对上。 */
+:root {
+    /* 弹窗容器 */
+    --p-dialog-background: var(--bg-color, #202020);
+    --p-dialog-color: var(--fg-color, #fff);
+    --p-dialog-header-color: var(--fg-color, #fff);
+    --p-dialog-border-color: var(--border-color, #4e4e4e);
+    --p-dialog-border-radius: 8px;
+    --p-dialog-header-padding: 1rem 1.25rem;
+    --p-dialog-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    --p-content-background: var(--bg-color, #202020);
+    --p-content-border-color: var(--border-color, #4e4e4e);
+    --p-text-color: var(--fg-color, #fff);
+    --p-text-muted-color: var(--descrip-text, #999);
+    --p-divider-color: var(--border-color, #4e4e4e);
+    --p-divider-border-color: var(--border-color, #4e4e4e);
+
+    /* 输入框与表单字段 */
+    --p-inputtext-background: var(--input-surface, rgba(0, 0, 0, .15));
+    --p-inputtext-color: var(--input-text, #ddd);
+    --p-inputtext-border-color: var(--border-color, #4e4e4e);
+    --p-inputtext-border-radius: 4px;
+    --p-inputtext-hover-border-color: var(--interface-stroke, #505051);
+    --p-inputtext-focus-border-color: var(--primary-bg, #236692);
+    --p-inputtext-focus-ring-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-bg, #236692) 40%, transparent);
+    --p-inputtext-shadow: none;
+    --p-input-background: var(--input-surface, rgba(0, 0, 0, .15));
+    --p-form-field-hover-border-color: var(--interface-stroke, #505051);
+    --p-form-field-focus-border-color: var(--primary-bg, #236692);
+    --p-form-field-filled-hover-background: var(--comfy-menu-secondary-bg, #292929);
+
+    /* 主色与表面色阶 */
+    --p-primary-color: var(--primary-bg, #236692);
+    --p-primary-hover-color: var(--primary-hover-bg, #3485bb);
+    --p-primary-500: var(--primary-bg, #236692);
+    --p-primary-400: var(--primary-hover-bg, #3485bb);
+    --p-primary-100: color-mix(in srgb, var(--primary-bg, #236692) 25%, transparent);
+    --p-panel-border-color: var(--border-color, #4e4e4e);
+    --p-surface-0: var(--bg-color, #202020);
+    --p-surface-50: var(--bg-color, #202020);
+    --p-surface-100: var(--comfy-menu-secondary-bg, #292929);
+    --p-surface-400: var(--border-color, #4e4e4e);
+    --p-surface-700: var(--comfy-menu-bg, #353535);
+
+    /* 按钮 */
+    --p-button-primary-background: var(--primary-bg, #236692);
+    --p-button-primary-color: var(--primary-fg, #fff);
+    --p-button-primary-border-color: var(--primary-bg, #236692);
+    --p-button-primary-hover-background: var(--primary-hover-bg, #3485bb);
+    --p-button-primary-hover-color: var(--primary-fg, #fff);
+    --p-button-primary-hover-border-color: var(--primary-hover-bg, #3485bb);
+    --p-button-secondary-background: var(--comfy-menu-secondary-bg, #292929);
+    --p-button-secondary-color: var(--input-text, #ddd);
+    --p-button-secondary-hover-background: var(--comfy-menu-bg, #353535);
+    --p-button-text-primary-color: var(--primary-bg, #236692);
+    --p-button-text-secondary-color: var(--input-text, #ddd);
+    --p-button-text-secondary-hover-background: rgba(255, 255, 255, .08);
+    --p-button-danger-background: var(--error-text, #f44);
+    --p-button-danger-color: #fff;
+    --p-button-danger-border-color: var(--error-text, #f44);
+    --p-button-danger-hover-background: #d32f2f;
+    --p-button-danger-hover-border-color: #d32f2f;
+    --p-button-danger-active-border-color: #b71c1c;
+
+    /* 下拉与列表 */
+    --p-select-background: var(--input-surface, rgba(0, 0, 0, .15));
+    --p-select-color: var(--input-text, #ddd);
+    --p-select-border-color: var(--border-color, #4e4e4e);
+    --p-select-border-radius: 4px;
+    --p-select-shadow: none;
+    --p-select-padding-x: 10px;
+    --p-select-padding-y: 6px;
+    --p-select-list-gap: 2px;
+    --p-select-overlay-background: var(--comfy-menu-bg, #353535);
+    --p-select-overlay-border-color: var(--border-color, #4e4e4e);
+    --p-select-overlay-border-radius: 6px;
+    --p-select-overlay-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+    --p-select-option-color: var(--fg-color, #fff);
+    --p-select-option-focus-background: var(--comfy-menu-secondary-bg, #292929);
+    --p-select-option-focus-color: var(--fg-color, #fff);
+    --p-select-option-selected-background: var(--primary-bg, #236692);
+    --p-select-option-selected-color: #fff;
+    --p-select-option-border-radius: 4px;
+    --p-listbox-background: var(--bg-color, #202020);
+    --p-listbox-option-selected-color: #fff;
+    --p-list-item-color: var(--fg-color, #fff);
+    --p-list-item-padding: 8px 12px;
+    --p-list-padding: 4px;
+    --p-list-option-focus-background: var(--comfy-menu-bg, #353535);
+    --p-list-option-selected-focus-background: var(--primary-bg, #236692);
+
+    /* 复选框 */
+    --p-checkbox-background: var(--input-surface, rgba(0, 0, 0, .15));
+    --p-checkbox-border-color: var(--border-color, #4e4e4e);
+    --p-checkbox-border-radius: 4px;
+    --p-checkbox-hover-border-color: var(--interface-stroke, #505051);
+    --p-checkbox-checked-background: var(--primary-bg, #236692);
+    --p-checkbox-checked-border-color: var(--primary-bg, #236692);
+    --p-checkbox-checked-hover-background: var(--primary-hover-bg, #3485bb);
+    --p-checkbox-checked-hover-border-color: var(--primary-hover-bg, #3485bb);
+    --p-checkbox-icon-checked-color: #fff;
+
+    /* 提示与状态色 */
+    --p-message-info-color: #64b5f6;
+    --p-message-info-background: rgba(100, 181, 246, .15);
+    --p-message-info-border-color: rgba(100, 181, 246, .35);
+    --p-message-warn-color: #ffb300;
+    --p-message-error-color: var(--error-text, #f44);
+    --p-message-success-color: #66bb6a;
+    --p-green-500: #66bb6a;
+    --p-green-600: #4caf50;
+    --p-red-500: var(--error-text, #f44);
+    --p-red-600: #d32f2f;
+    --p-orange-500: #ff9800;
+    --p-scrollpanel-bar-background: var(--comfy-menu-bg, #353535);
 }
 
 /* ===================================================
@@ -143,10 +265,10 @@
     transform: translate(-50%, -50%) scale(0.8);
     /* 响应式宽度设置 */
     width: min(90vw, 1048px);
-    min-width: 800px;
+    min-width: min(800px, 92vw);
     /* 响应式高度设置 */
     max-height: 90vh;
-    min-height: 600px;
+    min-height: min(600px, 80vh);
     /* height: 760px; */
     margin: 0;
     z-index: var(--settings-modal-z-index);

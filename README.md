@@ -4,7 +4,7 @@
 <h1 align="center">ComfyUI Prompt Assistant✨提示词小助手V2.0</h1>
 
 
-<img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/yawiii/ComfyUI-Prompt-Assistant">
+<img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/idleeyan/ComfyUI-Prompt-Assistant">
 <a href="https://space.bilibili.com/520680644"><img alt="bilibili" src="https://img.shields.io/badge/详细视频教程-blue?style=flat&logo=bilibili&logoColor=2300A5DC&labelColor=%23FFFFFF&color=%2307A3D7"></a>
 <a href="https://data.xflow.cc/wechat.png"><img alt="weChat" src="https://img.shields.io/badge/欢迎加入交流群-blue?logo=wechat&logoColor=green&labelColor=%23FFFFFF&color=%2307A3D7"></a>
 <a href="https://ycn58r88iss5.feishu.cn/share/base/form/shrcnJ1AzbUJCynW9qrNJ2zPugy"><img alt="bug" src="https://img.shields.io/badge/Bug-反馈-orange"></a>
@@ -13,7 +13,7 @@
 
 <div align="center">
 
-[简体中文](README.md) | [English](README.en.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [繁體中文](README.zh-TW.md)
+[简体中文](README.md) | [English](README.en.md)
 
 </div>
 
@@ -25,6 +25,14 @@
 ## **📣更新**
 
 <details open>
+<summary><strong>[2026-10-30] 🔧Fork 修复</strong></summary>
+
+**Fixes:**
+* **规则管理器显示异常**：修复新版 ComfyUI 前端（comfyui-frontend-package 1.5x+）下规则管理器弹窗透明无边框、无法点击的问题。补全前端不再注入的 `--p-*` 主题变量；弹窗与内部浮层改为跟随基座的响应式尺寸与层级；浮层统一挂载到当前打开的对话框容器内，避免被模态层标记 `pointer-events: none` 而无法点击。
+
+</details>
+
+<details>
 <summary><strong>[2026-04-21] 🔥V2.0.6</strong></summary>
 
 **Changes:**
@@ -382,14 +390,14 @@
 
 2. 克隆这个代码仓库:
    ```bash
-   git clone https://github.com/yawiii/ComfyUI-Prompt-Assistant.git
+   git clone https://github.com/idleeyan/ComfyUI-Prompt-Assistant.git
    ```
 
 3. 重启 ComfyUI：
 
 #### **下载插件压缩包**
 
-1.  从[克隆仓库](https://github.com/yawiii/comfyui_prompt_assistant/releases)中下载最新版本
+1.  从[克隆仓库](https://github.com/idleeyan/ComfyUI-Prompt-Assistant/releases)中下载最新版本
 
     解压缩到 `ComfyUI/custom_nodes` 目录下
 
