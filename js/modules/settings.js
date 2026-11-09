@@ -78,7 +78,8 @@ const SERVICE_TYPES = {
         configEndpoint: '/config/translate',
         serviceType: 'translate',
         filterKey: 'llm_models',
-        includeBaidu: true
+        includeBaidu: true,
+        includeGoogle: true // RU-FORK
     },
     llm: {
         name: tUI('提示词优化'),
@@ -193,6 +194,10 @@ const serviceSelector = {
         // 添加百度翻译选项（仅翻译类型）
         if (config.includeBaidu) {
             options.push({ value: 'baidu', text: tUI('百度翻译') });
+        }
+        // RU-FORK: Google Translate (бесплатный, без ключа) — только для перевода
+        if (config.includeGoogle) {
+            options.push({ value: 'google', text: 'Google Translate' });
         }
 
         // 过滤并添加其他服务

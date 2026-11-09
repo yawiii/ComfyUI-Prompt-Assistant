@@ -147,6 +147,26 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
         return request_id, result
 
     @classmethod
+    def _translate_with_google(cls, text, from_lang, to_lang, translate_service, from_lang_name, to_lang_name, unique_id):
+        """RU-FORK: перевод через бесплатный публичный Google Translate (без ключей)"""
+        from ..services.google_translate import GoogleTranslateService
+
+        request_id = generate_request_id("trans", "google", unique_id)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_NODE, "Google Translate", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+
+        result = cls._run_llm_task(
+            GoogleTranslateService.translate,
+            "Google Translate",
+            text=text,
+            from_lang=from_lang,
+            to_lang=to_lang,
+            request_id=request_id,
+            task_type=TASK_TRANSLATE,
+            source=SOURCE_NODE
+        )
+        return request_id, result
+
+    @classmethod
     def _translate_with_llm(cls, text, from_lang, to_lang, service_id, model_name, service, service_display_name, from_lang_name, to_lang_name, auto_unload, unique_id):
         """使用 LLM 翻译服务"""
         # ---构建 provider_config---
@@ -271,6 +291,12 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
             # ---百度翻译特殊处理---
             if service_id == 'baidu':
                 request_id, result = cls._translate_with_baidu(
+                    source_text, detected_lang, to_lang,
+                    translate_service, from_lang_name, to_lang_name, unique_id
+                )
+            # ---RU-FORK: Google Translate (бесплатный, без ключей)---
+            elif service_id == 'google':
+                request_id, result = cls._translate_with_google(
                     source_text, detected_lang, to_lang,
                     translate_service, from_lang_name, to_lang_name, unique_id
                 )

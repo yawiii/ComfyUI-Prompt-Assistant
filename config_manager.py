@@ -825,6 +825,20 @@ class ConfigManager:
                 "top_p": 0.9,
                 "providers": {}
             }
+
+        # RU-FORK: Google Translate (бесплатный публичный эндпоинт, без ключей).
+        # Используется только веткой перевода (нода/кнопка), LLM-конфиг не нужен.
+        if current_service_id == 'google':
+            return {
+                "provider": "google",
+                "model": "",
+                "base_url": "",
+                "api_key": "",
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.9,
+                "providers": {}
+            }
         
         # 查找对应的LLM服务
         service = self._get_service_by_id(current_service_id)
@@ -1497,24 +1511,39 @@ class ConfigManager:
                 if service_type not in ['llm', 'translate']:
                     self._log(f"设置当前服务商失败: 百度翻译不支持{service_type}服务类型")
                     return False
-                
+
                 # 确保baidu_translate配置存在
                 if 'baidu_translate' not in config:
                     config['baidu_translate'] = {"app_id": "", "secret_key": ""}
-                
+
                 # 确保current_services结构存在
                 if 'current_services' not in config:
                     config['current_services'] = {}
-                
+
                 # 设置百度为当前服务(无模型概念)
                 config['current_services'][service_type] = {
                     "service": "baidu",
                     "model": ""
                 }
-                
+
                 # 保存配置
                 if self.save_config(config):
                     self._log(f"当前服务商已切换: 百度翻译 ({service_type})")
+                    return True
+
+            # ---RU-FORK: Google Translate (только перевод, без ключей и модели)---
+            if service_id == 'google':
+                if service_type != 'translate':
+                    self._log(f"设置当前服务商失败: Google Translate 不支持{service_type}服务类型")
+                    return False
+                if 'current_services' not in config:
+                    config['current_services'] = {}
+                config['current_services'][service_type] = {
+                    "service": "google",
+                    "model": ""
+                }
+                if self.save_config(config):
+                    self._log(f"当前服务商已切换: Google Translate ({service_type})")
                     return True
                 else:
                     self._log("设置当前服务商失败: 保存配置失败")
