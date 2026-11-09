@@ -88,6 +88,9 @@ export class ButtonMenu {
         // 创建菜单容器
         const menuContainer = document.createElement('div');
         menuContainer.className = 'button-context-menu';
+        // RU-FORK: меню — ребёнок body; при открытых диалогах ComfyUI (Radix)
+        // body получает pointer-events:none — явное авто делает меню кликабельным
+        menuContainer.style.pointerEvents = 'auto';
 
         // 创建菜单项列表
         const menuList = document.createElement('ul');

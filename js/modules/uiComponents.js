@@ -42,7 +42,12 @@ let lastCreateGuard = { key: null, time: 0 };
 const DOUBLE_OPEN_GUARD_MS = 300;
 
 /**
- * Максимальный z-index среди ComfyUI-диалогов (учитываем mask — он блокирует ввод).
+ * Максимальный z-index среди чужих модальных диалогов.
+ * Учитывает два вида диалогов ComfyUI:
+ *  - PrimeVue (.p-dialog / .p-dialog-mask);
+ *  - новый Radix/Tailwind-фронтенд (fixed-элементы с высоким z-index,
+ *    например окно "Settings" со z≈1700). Радикс-диалоги определяются
+ *    по факту блокировки body (см. isForeignModalOpen).
  */
 export function getForeignDialogTopZ() {
     let top = 0;
@@ -50,7 +55,29 @@ export function getForeignDialogTopZ() {
         const z = parseInt(window.getComputedStyle(el).zIndex, 10);
         if (!isNaN(z) && z > top) top = z;
     });
+    if (top > 0) return top;
+    // Radix-диалоги: ищем крупные fixed-элементы не из нашего плагина
+    if (!isForeignModalOpen()) return 0;
+    document.querySelectorAll('body > div').forEach((el) => {
+        if (el.closest('.settings-modal, .popup_container, .pa-context-menu')) return;
+        const cs = window.getComputedStyle(el);
+        if (cs.position !== 'fixed' || cs.visibility === 'hidden') return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 300 || r.height < 200) return;
+        const z = parseInt(cs.zIndex, 10);
+        if (!isNaN(z) && z > top) top = z;
+    });
     return top;
+}
+
+/**
+ * Открыт ли чужой модальный диалог. Новый фронтенд ComfyUI при открытии
+ * своих диалогов инлайн-блокирует body: document.body.style.pointerEvents='none'.
+ * Это надёжный универсальный маркер (работает и для Radix, и для PrimeVue).
+ */
+export function isForeignModalOpen() {
+    if (document.body && document.body.style.pointerEvents === 'none') return true;
+    return !!document.querySelector('.p-dialog');
 }
 
 /**
@@ -110,13 +137,24 @@ export function rebasePromptAssistantLayers() {
 
 /**
  * Наблюдатель: ComfyUI открывает/закрывает свои диалоги — пересобираем слои PA.
- * Возвращает функцию остановки наблюдения.
+ * Следит и за PrimeVue (.p-dialog), и за Radix-диалогами нового фронтенда
+ * (те переключают body style.pointerEvents). Возвращает функцию остановки.
  */
 export function installLayerRebaseObserver() {
     if (typeof document === 'undefined' || !document.body) return () => { };
+    const schedule = () => {
+        // Дать чужому фронтенду применить свои стили, затем скорректировать наши слои
+        setTimeout(rebasePromptAssistantLayers, 50);
+        setTimeout(rebasePromptAssistantLayers, 300);
+    };
     const observer = new MutationObserver((mutations) => {
         let relevant = false;
         for (const m of mutations) {
+            if (m.type === 'attributes' && m.target === document.body) {
+                // Открытие/закрытие Radix-диалога меняет style/class самого body
+                relevant = true;
+                break;
+            }
             if (m.type !== 'childList') continue;
             for (const node of m.addedNodes) {
                 if (node.nodeType === Node.ELEMENT_NODE &&
@@ -137,13 +175,14 @@ export function installLayerRebaseObserver() {
             }
             if (relevant) break;
         }
-        if (relevant) {
-            // Дать PrimeVue применить свои z-index'ы, затем скорректировать наши слои
-            setTimeout(rebasePromptAssistantLayers, 50);
-            setTimeout(rebasePromptAssistantLayers, 300);
-        }
+        if (relevant) schedule();
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
     return () => observer.disconnect();
 }
 
@@ -585,6 +624,15 @@ export function createSettingsDialog(options) {
         modal.style.zIndex = modalZ;
         if (overlay) {
             overlay.style.zIndex = overlayZ;
+        }
+
+        // RU-FORK(КРИТИЧНО): новый фронтенд ComfyUI при открытии своих диалогов
+        // ставит body style.pointerEvents='none' — все наши окна наследуют запрет
+        // кликов ("прозрачное окно, кнопки не работают"). Явный pointer-events:auto
+        // на самом окне восстанавливает кликабельность всего его поддерева.
+        modal.style.pointerEvents = 'auto';
+        if (overlay) {
+            overlay.style.pointerEvents = 'auto';
         }
 
         // 显示弹窗和遮罩层
@@ -1835,6 +1883,9 @@ export function showContextMenu(options) {
 
     const menu = document.createElement('div');
     menu.className = 'pa-context-menu pa-context-menu-show'; // 直接显示
+    // RU-FORK: меню — ребёнок body; явное pointer-events:auto против блокировки
+    // body диалогами нового фронтенда ComfyUI
+    menu.style.pointerEvents = 'auto';
 
     // 我们需要手动设置样式以确保它立即可见但可以被定位
     menu.style.display = 'block';
@@ -2456,6 +2507,9 @@ export function createSplitButton(options) {
     menuPanel.style.position = 'fixed';
     menuPanel.style.minWidth = '12rem';
     // z-index 由 CSS 的 --settings-context-menu-z-index 变量管理
+    // RU-FORK: панель — ребёнок body; явное pointer-events:auto против блокировки body
+    // диалогами нового фронтенда ComfyUI
+    menuPanel.style.pointerEvents = 'auto';
 
     const menuList = document.createElement('ul');
     menuList.className = 'pa-context-menu-list';
@@ -2515,6 +2569,7 @@ export function createSplitButton(options) {
             submenuPanel.className = 'pa-context-menu pa-context-submenu';
             submenuPanel.style.display = 'none';
             submenuPanel.style.position = 'fixed';
+            submenuPanel.style.pointerEvents = 'auto'; // RU-FORK: см. menuPanel
 
             const submenuList = document.createElement('ul');
             submenuList.className = 'pa-context-menu-list';

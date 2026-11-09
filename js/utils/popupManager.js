@@ -112,6 +112,10 @@ class PopupManager {
         // 添加到文档
         document.body.appendChild(popup);
 
+        // RU-FORK: новый фронтенд ComfyUI блокирует body (pointer-events:none)
+        // при открытых своих диалогах — явное авто возвращает кликабельность панели
+        popup.style.pointerEvents = 'auto';
+
         // RU-FORK: согласовать слои PA с открытыми ComfyUI-диалогами
         rebasePromptAssistantLayers();
 
