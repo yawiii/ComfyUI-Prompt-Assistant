@@ -199,6 +199,13 @@ class LLMService(OpenAICompatibleService):
                 "messages": ollama_messages,
                 "stream": True
             }
+
+            # RU-FORK(VRAM): при включённой авто-выгрузке Ollama освобождает модель
+            # сразу после завершения ответа (keep_alive=0), а не держит её 5 минут
+            # по умолчанию — исключает OOM при последующей загрузке диффузионной
+            # модели. Пост-выгрузка _unload_ollama_model остаётся как страховка.
+            if auto_unload:
+                payload["keep_alive"] = 0
             
             # ---构建 options---
             # 基础参数：num_ctx（动态上下文窗口大小）
@@ -223,10 +230,13 @@ class LLMService(OpenAICompatibleService):
                 payload.update(_thinking_extra)
             
             from ..server import is_streaming_progress_enabled
-            
-            # 动态超时计算: 基础30s + 每1000个Token预估增加5秒
+
+            # Динамический таймаут: база 30s + за каждый 1000 токенов контекста 5s.
+            # RU-FORK FIX: нижняя граница 60s была недостаточна для длинных переводов —
+            # холодная загрузка модели (~20s) + prompt eval + генерация длинного ответа
+            # легко превышают 60s (замер на RTX 4060 Ti: первый токен через 39s).
             estimated_timeout = 30.0 + (num_ctx / 1000) * 5.0
-            final_timeout = min(600.0, max(60.0, estimated_timeout)) # 限制在 60s - 600s 之间
+            final_timeout = min(600.0, max(180.0, estimated_timeout)) # 180s - 600s
             
             # 创建统一进度条（自动处理等待→生成→完成的完整生命周期）
             extra_info = f"Context:{num_ctx} | Timeout:{int(final_timeout)}s"
