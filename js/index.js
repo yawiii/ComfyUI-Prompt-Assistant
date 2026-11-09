@@ -16,6 +16,7 @@ import { imageCaption, ImageCaption } from './modules/imageCaption.js';
 import { nodeHelpTranslator } from './modules/nodeHelpTranslator.js';
 import { nodeMountService, RENDER_MODE } from './services/NodeMountService.js';
 import { tUI } from "./utils/uiI18n.js";
+import { installLayerRebaseObserver } from "./modules/uiComponents.js";
 import './node/captionFrame.js'; // 导入视频手动抽帧功能
 
 
@@ -47,6 +48,10 @@ app.registerExtension({
      */
     async setup() {
         try {
+            // RU-FORK: слежение за ComfyUI-диалогами и согласование слоёв PA
+            // (окна PA не должны перекрывать «Настройки» и другие диалоги ComfyUI)
+            installLayerRebaseObserver();
+
             // 初始化节点挂载服务（需要在其他初始化之前）
             nodeMountService.initialize();
 

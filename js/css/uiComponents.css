@@ -223,6 +223,9 @@
     opacity: 0;
     visibility: hidden;
     transform: translate(-50%, -50%) scale(0.8);
+    /* BUG-FIX(RU): во время 300мс анимации закрытия visibility переключается
+       в конце перехода — окно оставалось кликабельным ("прозрачная ловушка"). */
+    pointer-events: none;
 }
 
 /* 拖动时的状态 */
