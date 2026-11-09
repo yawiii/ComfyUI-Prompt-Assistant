@@ -3206,8 +3206,10 @@ body.column-resizing * {
    =================================================== */
 
 /* API 管理器主窗口 - 设置最小高度以适应内容 */
+/* RU-FORK: min-height не должен выталкивать окно за границы экрана
+   (min-height побеждает max-height в CSS) — ограничиваем вьюпортом */
 .settings-modal.api-config-dialog-v2 {
-    min-height: 760px;
+    min-height: min(760px, calc(100vh - 24px));
 }
 
 /* 调整通知区域位置到最底部 */
