@@ -104,6 +104,7 @@
                 "tooltip": "Target language for translation",
                 "options": {
                     "English": "English",
+                    "Russian": "Russian",
                     "Chinese": "Chinese"
                 }
             },

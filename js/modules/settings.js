@@ -851,6 +851,26 @@ export async function registerSettings() {
                     }
                 },
 
+                // Целевой язык кнопки «Перевод» у текстовых полей (RU-fork)
+                {
+                    id: "PromptAssistant.Features.TranslateTargetLang",
+                    name: "Целевой язык кнопки перевода",
+                    category: ["✨提示词小助手", " 翻译功能设置", "Целевой язык перевода"],
+                    type: "combo",
+                    options: [
+                        { text: "Авто (по языку интерфейса)", value: "auto" },
+                        { text: "Переводить на русский", value: "ru" },
+                        { text: "Переводить на английский", value: "en" },
+                        { text: "Переводить на китайский", value: "zh" }
+                    ],
+                    defaultValue: "auto",
+                    tooltip: "Определяет направление кнопки «Перевод» у текстовых полей: Авто — английский/китайский текст переводится на русский при русской локали, русский — на английский. Можно задать язык принудительно.",
+                    onChange: (value) => {
+                        FEATURES.translateTargetLang = value;
+                        logger.log(`TranslateTargetLang - 已设置为:${value}`);
+                    }
+                },
+
                 // 翻译格式化选项
                 {
                     id: "PromptAssistant.Features.TranslateFormatPunctuation",

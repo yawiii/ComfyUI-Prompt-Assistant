@@ -13,7 +13,6 @@ V3 迁移说明：
 """
 
 import hashlib
-import re
 
 from comfy.model_management import InterruptProcessingException
 from comfy_api.latest import io
@@ -25,6 +24,7 @@ from ..utils.common import (
     log_prepare, log_error, TASK_TRANSLATE, SOURCE_NODE
 )
 from ..services.thinking_control import build_thinking_suppression
+from ..utils import language as langutil
 from .base import LLMNodeBase
 
 
@@ -33,6 +33,9 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
     提示词翻译节点（V3）
     自动识别输入语言并翻译成目标语言，支持多种翻译服务
     """
+
+    # Целевые языки: карта вынесена в utils/language.py (см. комментарий там)
+    TARGET_LANGUAGE_CODES = langutil.TARGET_LANGUAGE_CODES
 
     @classmethod
     def define_schema(cls):
@@ -57,7 +60,7 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
                 ),
                 io.Combo.Input(
                     "target_language",
-                    options=["English", "Chinese"],
+                    options=list(cls.TARGET_LANGUAGE_CODES.keys()),
                     default="English",
                 ),
                 io.Combo.Input(
@@ -114,27 +117,12 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
     @classmethod
     def _contains_chinese(cls, text: str) -> bool:
         """检查文本是否包含中文字符"""
-        if not text:
-            return False
-        return bool(re.search('[\u4e00-\u9fa5]', text))
+        return langutil.contains_cjk(text)
 
     @classmethod
     def _detect_language(cls, text: str) -> str:
-        """自动检测文本语言"""
-        if not text:
-            return "auto"
-
-        # 检查是否为纯英文（只包含 ASCII 可打印字符）
-        is_pure_english = bool(re.fullmatch(r'[ -~]+', text))
-        # 检查是否包含中文字符
-        contains_chinese = cls._contains_chinese(text)
-
-        if contains_chinese:
-            return "zh"
-        elif is_pure_english:
-            return "en"
-        else:
-            return "auto"
+        """自动检测文本语言 (zh / ru / en / auto)"""
+        return langutil.detect_language(text)
 
     @classmethod
     def _translate_with_baidu(cls, text, from_lang, to_lang, service_name, from_lang_name, to_lang_name, unique_id):
@@ -248,24 +236,30 @@ class PromptTranslate(LLMNodeBase, io.ComfyNode):
 
             # 自动检测源语言
             detected_lang = cls._detect_language(source_text)
-            to_lang = "en" if target_language == "English" else "zh"
+
+            # ---Явное отображение целевого языка (BUG-FIX: раньше всё, кроме
+            # "English", молча становилось "zh")---
+            to_lang = langutil.resolve_target_language(target_language, cls.TARGET_LANGUAGE_CODES)
+            if to_lang is None:
+                raise ValueError(
+                    f"Unsupported target_language value: {target_language!r}. "
+                    f"Expected one of: {', '.join(cls.TARGET_LANGUAGE_CODES.keys())}. "
+                    "The workflow was probably saved with an incompatible plugin version."
+                )
 
             # 智能跳过翻译逻辑
             skip_translation = False
-            if to_lang == 'en' and detected_lang == 'en':
+            if to_lang == detected_lang and to_lang in ('en', 'zh', 'ru'):
                 from ..utils.common import _ANSI_CLEAR_EOL
-                print(f"\r{_ANSI_CLEAR_EOL}{cls.REQUEST_PREFIX} 检测到英文输入，目标为英文，无需翻译", flush=True)
-                skip_translation = True
-            elif to_lang == 'zh' and detected_lang == 'zh':
-                from ..utils.common import _ANSI_CLEAR_EOL
-                print(f"\r{_ANSI_CLEAR_EOL}{cls.REQUEST_PREFIX} 检测到中文输入，目标为中文，无需翻译", flush=True)
+                lang_label = langutil.LANG_NAME_MAP.get(to_lang, to_lang)
+                print(f"\r{_ANSI_CLEAR_EOL}{cls.REQUEST_PREFIX} 检测到{lang_label}输入，目标为{lang_label}，无需翻译", flush=True)
                 skip_translation = True
 
             if skip_translation:
                 return io.NodeOutput(source_text)
 
             # 映射语言名称
-            lang_map = {'zh': '中文', 'en': '英文', 'auto': '原文'}
+            lang_map = langutil.LANG_NAME_MAP
             from_lang_name = lang_map.get(detected_lang, detected_lang)
             to_lang_name = lang_map.get(to_lang, to_lang)
 

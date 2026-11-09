@@ -104,6 +104,7 @@
                 "tooltip": "翻譯的目標語言",
                 "options": {
                     "English": "英文",
+                    "Russian": "俄語",
                     "Chinese": "中文"
                 }
             },

@@ -104,6 +104,7 @@
                 "tooltip": "번역 대상 언어",
                 "options": {
                     "English": "영어",
+                    "Russian": "러시아어",
                     "Chinese": "중국인"
                 }
             },

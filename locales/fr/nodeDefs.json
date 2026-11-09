@@ -104,6 +104,7 @@
                 "tooltip": "Langue cible pour la traduction",
                 "options": {
                     "English": "English",
+                    "Russian": "Russe",
                     "Chinese": "Chinese"
                 }
             },
