@@ -78,7 +78,8 @@ const SERVICE_TYPES = {
         configEndpoint: '/config/translate',
         serviceType: 'translate',
         filterKey: 'llm_models',
-        includeBaidu: true
+        includeBaidu: true,
+        includeGoogle: true // RU-FORK
     },
     llm: {
         name: tUI('提示词优化'),
@@ -193,6 +194,10 @@ const serviceSelector = {
         // 添加百度翻译选项（仅翻译类型）
         if (config.includeBaidu) {
             options.push({ value: 'baidu', text: tUI('百度翻译') });
+        }
+        // RU-FORK: Google Translate (бесплатный, без ключа) — только для перевода
+        if (config.includeGoogle) {
+            options.push({ value: 'google', text: 'Google Translate' });
         }
 
         // 过滤并添加其他服务
@@ -848,6 +853,26 @@ export async function registerSettings() {
                     onChange: (value) => {
                         FEATURES.mixedLangTranslateRule = value;
                         logger.log(`混合语言翻译规则 - 已设置为:${value}`);
+                    }
+                },
+
+                // Целевой язык кнопки «Перевод» у текстовых полей (RU-fork)
+                {
+                    id: "PromptAssistant.Features.TranslateTargetLang",
+                    name: "Целевой язык кнопки перевода",
+                    category: ["✨提示词小助手", " 翻译功能设置", "Целевой язык перевода"],
+                    type: "combo",
+                    options: [
+                        { text: "Авто (по языку интерфейса)", value: "auto" },
+                        { text: "Переводить на русский", value: "ru" },
+                        { text: "Переводить на английский", value: "en" },
+                        { text: "Переводить на китайский", value: "zh" }
+                    ],
+                    defaultValue: "auto",
+                    tooltip: "Определяет направление кнопки «Перевод» у текстовых полей: Авто — английский/китайский текст переводится на русский при русской локали, русский — на английский. Можно задать язык принудительно.",
+                    onChange: (value) => {
+                        FEATURES.translateTargetLang = value;
+                        logger.log(`TranslateTargetLang - 已设置为:${value}`);
                     }
                 },
 

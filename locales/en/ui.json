@@ -367,5 +367,20 @@
   "帧数已截断": "⚠️ Frames Truncated",
   "帧数截断详情": "Model supports max {max} frames, {truncated} frame(s) ignored",
   "建议不要在地址后方添加 /v1。不加 /v1 会走原生 Ollama API，加了 /v1 则会走 OpenAI 兼容请求格式。": "Do not add /v1 after the address unless needed. Without /v1, native Ollama API is used; with /v1, OpenAI-compatible request format is used.",
-  "建议优先选择非思考模型或指令型（-instruct）模型，以减少思维链输出、截断和响应不稳定的问题。": "Prefer non-reasoning models or instruction-tuned (-instruct) models to reduce chain-of-thought output, truncation, and unstable responses."
+  "建议优先选择非思考模型或指令型（-instruct）模型，以减少思维链输出、截断和响应不稳定的问题。": "Prefer non-reasoning models or instruction-tuned (-instruct) models to reduce chain-of-thought output, truncation, and unstable responses.",
+  "扩写-通用": "Universal Expansion",
+  "扩写-人像大师": "Portrait Master",
+  "扩写-Tags风格": "Tags-style Expansion",
+  "Qwen-Image-Edit指令优化": "Qwen-Image-Edit: Command Optimization",
+  "Kontext指令优化并翻译": "Kontext: Command Optimization & Translation",
+  "Wan视频提示词（by:诺曼底）": "Wan Video Prompts (by: Normandy)",
+  "像素级描述（by:阿丹）": "Pixel-level Description (by: Adan)",
+  "图像描述-Tag风格": "Image Description - Tag Style",
+  "图像编辑重绘（by:CJL）": "Image Edit / Redraw (by: CJL)",
+  "Qwen-Image-Edit指令优化-视觉版": "Qwen-Image-Edit: Commands (Visual)",
+  "图像到视频提示词（by:CJL）": "Image-to-Video Prompt (by: CJL)",
+  "Kontext指令优化并翻译-视觉版": "Kontext: Commands & Translation (Visual)",
+  "视频复刻与重构": "Video Replication & Reconstruction",
+  "视频分镜解构大师": "Video Storyboard Master",
+  "图像编辑指令": "Image Editing Commands"
 }

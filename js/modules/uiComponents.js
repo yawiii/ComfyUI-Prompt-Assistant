@@ -9,9 +9,7 @@ import { tUI, localizeElement, observeLocalizedMutations } from "../utils/uiI18n
 
 // ---动态 Z-Index 计算---
 /**
- * 获取 ComfyUI 设置弹窗的 z-index 值
- * 只针对 ComfyUI 的 p-dialog 元素进行查找，避免遍历所有 DOM 元素造成性能问题
- * @returns {number} ComfyUI 弹窗的 z-index 值，如果不存在则返回基础值
+ * Если не найден ComfyUI диалог, возвращается базовый z-index
  */
 function getComfyUIDialogZIndex() {
     // ComfyUI 使用 PrimeVue，设置弹窗的类名是 .p-dialog
@@ -24,6 +22,168 @@ function getComfyUIDialogZIndex() {
     }
     // 如果没有找到 ComfyUI 弹窗，返回 CSS 变量定义的基础值
     return 10200;
+}
+
+// ====================== RU-FORK: управление слоями окон ======================
+// Единая политика стекинга (ТЗ §3):
+//  - модалки PA живут в реестре modalStack (push/pop);
+//  - новая модалка всегда выше предыдущей;
+//  - если открыт ComfyUI-диалог (например «Настройки»), модалки PA,
+//    открытые ДО него, опускаются ПОД него (rebase) и снова не перехватывают
+//    ввод; при закрытии ComfyUI-диалога слои PA восстанавливаются;
+//  - модалка, открытая ПОВЕРХ ComfyUI-диалога (кнопка «API-менеджер» в
+//    настройках), располагается выше него, как и раньше.
+
+// Реестр открытых модалок PA: [{modal, overlay, key, escHandler, prevFocus}]
+export const modalStack = [];
+
+// Защита от двойного открытия (быстрый двойной клик по кнопке меню)
+let lastCreateGuard = { key: null, time: 0 };
+const DOUBLE_OPEN_GUARD_MS = 300;
+
+/**
+ * Максимальный z-index среди чужих модальных диалогов.
+ * Учитывает два вида диалогов ComfyUI:
+ *  - PrimeVue (.p-dialog / .p-dialog-mask);
+ *  - новый Radix/Tailwind-фронтенд (fixed-элементы с высоким z-index,
+ *    например окно "Settings" со z≈1700). Радикс-диалоги определяются
+ *    по факту блокировки body (см. isForeignModalOpen).
+ */
+export function getForeignDialogTopZ() {
+    let top = 0;
+    document.querySelectorAll('.p-dialog-mask, .p-dialog').forEach((el) => {
+        const z = parseInt(window.getComputedStyle(el).zIndex, 10);
+        if (!isNaN(z) && z > top) top = z;
+    });
+    if (top > 0) return top;
+    // Radix-диалоги: ищем крупные fixed-элементы не из нашего плагина
+    if (!isForeignModalOpen()) return 0;
+    document.querySelectorAll('body > div').forEach((el) => {
+        if (el.closest('.settings-modal, .popup_container, .pa-context-menu')) return;
+        const cs = window.getComputedStyle(el);
+        if (cs.position !== 'fixed' || cs.visibility === 'hidden') return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 300 || r.height < 200) return;
+        const z = parseInt(cs.zIndex, 10);
+        if (!isNaN(z) && z > top) top = z;
+    });
+    return top;
+}
+
+/**
+ * Открыт ли чужой модальный диалог. Новый фронтенд ComfyUI при открытии
+ * своих диалогов инлайн-блокирует body: document.body.style.pointerEvents='none'.
+ * Это надёжный универсальный маркер (работает и для Radix, и для PrimeVue).
+ */
+export function isForeignModalOpen() {
+    if (document.body && document.body.style.pointerEvents === 'none') return true;
+    return !!document.querySelector('.p-dialog');
+}
+
+/**
+ * Базовый z-index для новой модалки PA.
+ */
+function computeModalBaseZ() {
+    const depth = modalStack.length; // 0,1,2...
+    const foreignZ = getForeignDialogTopZ();
+    if (foreignZ > 0) {
+        // Открытие поверх открытого ComfyUI-диалога (кнопки в его вкладках PA)
+        return { modalZ: foreignZ + 10 + depth * 10, overlayZ: foreignZ + 9 + depth * 10 };
+    }
+    // Обычная база PA: 10200 + 10 за каждый уровень стека
+    return { modalZ: 10200 + depth * 10, overlayZ: 10199 + depth * 10 };
+}
+
+/**
+ * Поднять/опустить слои PA в соответствии с текущим окружением.
+ * Вызывается при появлении/исчезновении ComfyUI-диалогов.
+ */
+export function rebasePromptAssistantLayers() {
+    const foreignZ = getForeignDialogTopZ();
+    const depth = modalStack.length;
+
+    // 1. Модалки PA из реестра
+    modalStack.forEach((entry, index) => {
+        const { modal, overlay } = entry;
+        if (!modal || !modal.isConnected) return;
+        let base;
+        if (foreignZ > 0) {
+            if (modal.dataset.paAboveForeign === '1') {
+                // Открыта поверх диалога — остаётся сверху (порядок стека сохранён)
+                base = foreignZ + 10 + index * 10;
+            } else {
+                // Опускаем под диалог и его mask; более поздние модалки — выше ранних
+                base = foreignZ - 20 - depth * 10 + index * 10;
+            }
+        } else {
+            base = 10200 + index * 10;
+        }
+        modal.style.zIndex = base;
+        if (overlay && overlay.isConnected) overlay.style.zIndex = base - 1;
+    });
+
+    // 2. Popup-панели PA (.popup_container): статичный 10180 конфликтует
+    //    с любым сценарием «ComfyUI-диалог открыт»
+    document.querySelectorAll('.popup_container').forEach((popup) => {
+        if (foreignZ > 0 && parseInt(popup.style.zIndex || '10180', 10) >= foreignZ) {
+            popup.dataset.paPrevZ = popup.style.zIndex || '10180';
+            popup.style.zIndex = String(Math.max(100, foreignZ - 220));
+        } else if (foreignZ === 0 && popup.dataset.paPrevZ) {
+            popup.style.zIndex = popup.dataset.paPrevZ;
+            delete popup.dataset.paPrevZ;
+        }
+    });
+}
+
+/**
+ * Наблюдатель: ComfyUI открывает/закрывает свои диалоги — пересобираем слои PA.
+ * Следит и за PrimeVue (.p-dialog), и за Radix-диалогами нового фронтенда
+ * (те переключают body style.pointerEvents). Возвращает функцию остановки.
+ */
+export function installLayerRebaseObserver() {
+    if (typeof document === 'undefined' || !document.body) return () => { };
+    const schedule = () => {
+        // Дать чужому фронтенду применить свои стили, затем скорректировать наши слои
+        setTimeout(rebasePromptAssistantLayers, 50);
+        setTimeout(rebasePromptAssistantLayers, 300);
+    };
+    const observer = new MutationObserver((mutations) => {
+        let relevant = false;
+        for (const m of mutations) {
+            if (m.type === 'attributes' && m.target === document.body) {
+                // Открытие/закрытие Radix-диалога меняет style/class самого body
+                relevant = true;
+                break;
+            }
+            if (m.type !== 'childList') continue;
+            for (const node of m.addedNodes) {
+                if (node.nodeType === Node.ELEMENT_NODE &&
+                    (node.classList?.contains('p-dialog') || node.classList?.contains('p-dialog-mask') ||
+                     node.querySelector?.('.p-dialog'))) {
+                    relevant = true;
+                    break;
+                }
+            }
+            if (!relevant) {
+                for (const node of m.removedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE &&
+                        (node.classList?.contains('p-dialog') || node.classList?.contains('p-dialog-mask'))) {
+                        relevant = true;
+                        break;
+                    }
+                }
+            }
+            if (relevant) break;
+        }
+        if (relevant) schedule();
+    });
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class']
+    });
+    return () => observer.disconnect();
 }
 
 /**
@@ -60,6 +220,18 @@ export function createSettingsDialog(options) {
             hideFooter = false,  // 是否隐藏底部按钮
         } = options;
 
+        // ---RU-FORK: защита от двойного открытия (быстрый двойной клик)---
+        const guardKey = `${dialogClassName || ''}|${typeof title === 'string' ? title : ''}`;
+        const now = Date.now();
+        if (lastCreateGuard.key === guardKey && (now - lastCreateGuard.time) < DOUBLE_OPEN_GUARD_MS) {
+            const existing = modalStack.find((e) => e.key === guardKey && e.modal.isConnected);
+            if (existing) {
+                logger.debug(`设置弹窗 | 忽略重复打开 | ${guardKey}`);
+                return existing.modal;
+            }
+        }
+        lastCreateGuard = { key: guardKey, time: now };
+
         let overlay = null;
         if (!disableBackdropAndCloseOnClickOutside) {
             // 创建遮罩层
@@ -91,6 +263,29 @@ export function createSettingsDialog(options) {
         // 表单修改状态
         let isFormModified = false;
 
+        // ---RU-FORK: реестр модалок, Esc, фокус---
+        const stackEntry = { modal, overlay, key: guardKey, escHandler: null, prevFocus: null };
+        modalStack.push(stackEntry);
+
+        const removeFromStack = () => {
+            const idx = modalStack.indexOf(stackEntry);
+            if (idx !== -1) modalStack.splice(idx, 1);
+        };
+
+        // Esc закрывает только верхнюю модалку стека; если модалка ушла ПОД
+        // ComfyUI-диалог (rebase), не перехватываем Esc — пусть его закрывает ComfyUI
+        stackEntry.escHandler = (e) => {
+            if (e.key !== 'Escape') return;
+            const foreignZ = getForeignDialogTopZ();
+            if (foreignZ > 0 && modal.dataset.paAboveForeign !== '1') return;
+            const top = modalStack[modalStack.length - 1];
+            if (top && top.modal === modal) {
+                e.stopPropagation();
+                handleCloseModal(false);
+            }
+        };
+        document.addEventListener('keydown', stackEntry.escHandler, true);
+
         // 内部关闭函数：关闭弹窗并调用 onClose 回调
         let stopContentLocalization = null;
         const closeDialog = () => {
@@ -98,7 +293,18 @@ export function createSettingsDialog(options) {
                 stopContentLocalization();
                 stopContentLocalization = null;
             }
+            removeFromStack();
+            if (stackEntry.escHandler) {
+                document.removeEventListener('keydown', stackEntry.escHandler, true);
+                stackEntry.escHandler = null;
+            }
             closeModalWithAnimation(modal, overlay);
+            // Восстановить фокус в точку, откуда модалку открыли
+            if (stackEntry.prevFocus && stackEntry.prevFocus.isConnected) {
+                try { stackEntry.prevFocus.focus({ preventScroll: true }); } catch { }
+            }
+            stackEntry.prevFocus = null;
+            rebasePromptAssistantLayers();
             // 在动画完成后调用 onClose 回调
             if (onClose) {
                 setTimeout(() => {
@@ -410,14 +616,33 @@ export function createSettingsDialog(options) {
 
         // 动态计算 z-index，确保始终在 ComfyUI 弹窗之上
         // 必须在 appendChild 之前设置，否则动画起始帧会使用 CSS 静态值
-        const baseZIndex = getComfyUIDialogZIndex() + 10;
-        modal.style.zIndex = baseZIndex;
+        // RU-FORK: база берётся из единой политики слоёв (реестр + ComfyUI-диалоги)
+        const { modalZ, overlayZ } = computeModalBaseZ();
+        if (getForeignDialogTopZ() > 0) {
+            modal.dataset.paAboveForeign = '1'; // открыта поверх ComfyUI-диалога
+        }
+        modal.style.zIndex = modalZ;
         if (overlay) {
-            overlay.style.zIndex = baseZIndex - 1;
+            overlay.style.zIndex = overlayZ;
+        }
+
+        // RU-FORK(КРИТИЧНО): новый фронтенд ComfyUI при открытии своих диалогов
+        // ставит body style.pointerEvents='none' — все наши окна наследуют запрет
+        // кликов ("прозрачное окно, кнопки не работают"). Явный pointer-events:auto
+        // на самом окне восстанавливает кликабельность всего его поддерева.
+        modal.style.pointerEvents = 'auto';
+        if (overlay) {
+            overlay.style.pointerEvents = 'auto';
         }
 
         // 显示弹窗和遮罩层
         document.body.appendChild(modal);
+
+        // RU-FORK: фокус в активную модалку (ввод/Tab/Esc сразу работают)
+        modal.setAttribute('tabindex', '-1');
+        modal.setAttribute('role', 'dialog');
+        stackEntry.prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        try { modal.focus({ preventScroll: true }); } catch { }
 
         // 添加显示动画
         requestAnimationFrame(() => {
@@ -445,6 +670,20 @@ export function createSettingsDialog(options) {
  * @param {HTMLElement} overlay 遮罩层元素
  */
 export function closeModalWithAnimation(modal, overlay) {
+    // RU-FORK: гарантированно снять модалку с учёта и снять Esc-обработчик,
+    // даже если closeModalWithAnimation вызван не через closeDialog
+    const idx = modalStack.findIndex((e) => e.modal === modal);
+    if (idx !== -1) {
+        const [entry] = modalStack.splice(idx, 1);
+        if (entry.escHandler) {
+            document.removeEventListener('keydown', entry.escHandler, true);
+            entry.escHandler = null;
+        }
+        if (entry.prevFocus && entry.prevFocus.isConnected) {
+            try { entry.prevFocus.focus({ preventScroll: true }); } catch { }
+        }
+    }
+
     // 添加关闭动画类
     modal.classList.remove('modal-show');
     modal.classList.add('modal-hide');
@@ -461,6 +700,7 @@ export function closeModalWithAnimation(modal, overlay) {
         if (overlay && overlay.parentNode) {
             overlay.parentNode.removeChild(overlay);
         }
+        rebasePromptAssistantLayers();
     }, 300); // 与 CSS transition 时间相匹配
 }
 
@@ -1643,6 +1883,9 @@ export function showContextMenu(options) {
 
     const menu = document.createElement('div');
     menu.className = 'pa-context-menu pa-context-menu-show'; // 直接显示
+    // RU-FORK: меню — ребёнок body; явное pointer-events:auto против блокировки
+    // body диалогами нового фронтенда ComfyUI
+    menu.style.pointerEvents = 'auto';
 
     // 我们需要手动设置样式以确保它立即可见但可以被定位
     menu.style.display = 'block';
@@ -2264,6 +2507,9 @@ export function createSplitButton(options) {
     menuPanel.style.position = 'fixed';
     menuPanel.style.minWidth = '12rem';
     // z-index 由 CSS 的 --settings-context-menu-z-index 变量管理
+    // RU-FORK: панель — ребёнок body; явное pointer-events:auto против блокировки body
+    // диалогами нового фронтенда ComfyUI
+    menuPanel.style.pointerEvents = 'auto';
 
     const menuList = document.createElement('ul');
     menuList.className = 'pa-context-menu-list';
@@ -2323,6 +2569,7 @@ export function createSplitButton(options) {
             submenuPanel.className = 'pa-context-menu pa-context-submenu';
             submenuPanel.style.display = 'none';
             submenuPanel.style.position = 'fixed';
+            submenuPanel.style.pointerEvents = 'auto'; // RU-FORK: см. menuPanel
 
             const submenuList = document.createElement('ul');
             submenuList.className = 'pa-context-menu-list';

@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { UIToolkit } from "./UIToolkit.js";
 import { promptAssistant } from "../modules/PromptAssistant.js";
 import { ResourceManager } from './resourceManager.js';
+import { rebasePromptAssistantLayers } from '../modules/uiComponents.js';
 
 class PopupManager {
     // 保存当前活动弹窗及其信息
@@ -38,6 +39,13 @@ class PopupManager {
         if (this.activePopup && this.activePopup !== popup) {
             // 【关键】标记正在切换弹窗
             this._isTransitioning = true;
+
+            // RU-FORK BUG-FIX: раньше здесь использовались неопределённые
+            // переменные oldPopup/oldPopupInfo -> ReferenceError, из-за которого
+            // старый popup оставался в DOM без обработчиков, новый не
+            // открывался, а _isTransitioning зависал в true навсегда.
+            const oldPopup = this.activePopup;
+            const oldPopupInfo = this.activePopupInfo;
 
             // 清除当前活动弹窗引用，避免hidePopup中的状态冲突
             this.activePopup = null;
@@ -103,6 +111,13 @@ class PopupManager {
 
         // 添加到文档
         document.body.appendChild(popup);
+
+        // RU-FORK: новый фронтенд ComfyUI блокирует body (pointer-events:none)
+        // при открытых своих диалогах — явное авто возвращает кликабельность панели
+        popup.style.pointerEvents = 'auto';
+
+        // RU-FORK: согласовать слои PA с открытыми ComfyUI-диалогами
+        rebasePromptAssistantLayers();
 
         // 设置关闭事件
         this.setupCloseEvents(popup, () => {

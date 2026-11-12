@@ -95,6 +95,22 @@ async function fetchUiLocale(language) {
     return await response.json();
 }
 
+/**
+ * RU-FORK: английская база для фолбэка. Незнакомые ключи в русской (и любой
+ * не-zh/en) локали показываются понятным английским, а не китайскими иероглифами.
+ */
+async function getEnglishFallbackMessages() {
+    if (!LOCALE_CACHE.has("en")) {
+        try {
+            LOCALE_CACHE.set("en", await fetchUiLocale("en"));
+        } catch (error) {
+            logger.warn(`[uiI18n] ${error.message}`);
+            return null;
+        }
+    }
+    return LOCALE_CACHE.get("en") || null;
+}
+
 export async function ensureUiLocaleLoaded(force = false) {
     const language = getCurrentUiLanguage();
     if (!force && currentLanguage === language && currentMessages && Object.keys(currentMessages).length > 0) {
@@ -119,7 +135,18 @@ export async function ensureUiLocaleLoaded(force = false) {
     }
 
     currentLanguage = language;
-    currentMessages = LOCALE_CACHE.get(language) || LOCALE_CACHE.get("zh") || {};
+
+    // RU-FORK: непереведённые ключи -> английский текст (базовый слой),
+    // вместо прежнего отката на китайский.
+    let messages = LOCALE_CACHE.get(language);
+    if (language !== "en" && language !== "zh") {
+        const enBase = await getEnglishFallbackMessages();
+        if (enBase) {
+            messages = { ...enBase, ...(messages || {}) };
+        }
+    }
+
+    currentMessages = messages || LOCALE_CACHE.get("zh") || {};
     return currentMessages;
 }
 

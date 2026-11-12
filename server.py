@@ -2,6 +2,7 @@ from aiohttp import web
 from server import PromptServer
 from .config_manager import config_manager
 from .services.baidu import BaiduTranslateService
+from .services.google_translate import GoogleTranslateService
 from .services.llm import LLMService
 from .services.vlm import VisionService
 from .services.model_list import get_models_from_service
@@ -1203,6 +1204,49 @@ async def baidu_translate(request):
     except Exception as e:
         error_msg = str(e)
         print(f"{ERROR_PREFIX} 百度翻译请求异常 | 错误:{error_msg}")
+        return web.json_response({"success": False, "error": error_msg})
+    finally:
+        if request_id and request_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[request_id]
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/google/translate')
+async def google_translate(request):
+    """
+    RU-FORK: Google Translate (публичный бесплатный эндпоинт, без ключа).
+    Формат запроса/ответа идентичен /baidu/translate.
+    """
+    request_id = None
+    try:
+        data = await request.json()
+        text = data.get("text")
+        from_lang = data.get("from", "auto")
+        to_lang = data.get("to", "zh")
+        request_id = data.get("request_id")
+        is_auto = data.get("is_auto", False)
+
+        if not request_id:
+            return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
+
+        lang_names = {
+            "auto": "自动检测", "zh": "简体中文", "en": "英文", "zh-TW": "繁体中文",
+            "ja": "日语", "ko": "韩语", "ar": "阿拉伯语", "es": "西班牙语",
+            "fa": "波斯语", "fr": "法语", "pt-BR": "葡萄牙语(巴西)", "ru": "俄语", "tr": "土耳其语"
+        }
+        from_lang_name = lang_names.get(from_lang, from_lang)
+        to_lang_name = lang_names.get(to_lang, to_lang)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "Google Translate", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+
+        task = asyncio.create_task(GoogleTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
+        ACTIVE_TASKS[request_id] = task
+
+        result = await task
+        return web.json_response(result)
+    except asyncio.CancelledError:
+        print(f"\r{_ANSI_CLEAR_EOL}{WARN_PREFIX} Google Translate任务被取消 | ID:{request_id}", flush=True)
+        return web.json_response({"success": False, "error": "请求已取消", "cancelled": True}, status=400)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"{ERROR_PREFIX} Google Translate请求异常 | 错误:{error_msg}")
         return web.json_response({"success": False, "error": error_msg})
     finally:
         if request_id and request_id in ACTIVE_TASKS:

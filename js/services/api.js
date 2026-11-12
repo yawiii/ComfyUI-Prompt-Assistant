@@ -386,6 +386,54 @@ class APIService {
     }
 
     /**
+     * RU-FORK: Google Translate (публичный бесплатный эндпоинт, без ключа)
+     */
+    static async googleTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
+        if (!request_id) {
+            request_id = this.generateRequestId('trans', 'google');
+        }
+
+        const controller = new AbortController();
+        const signal = controller.signal;
+        runningRequests.set(request_id, controller);
+
+        try {
+            if (!text || text.trim() === '') {
+                throw new Error('待翻译文本不能为空');
+            }
+
+            const apiUrl = this.getApiUrl('google/translate');
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text,
+                    from,
+                    to,
+                    request_id,
+                    is_auto
+                }),
+                signal
+            });
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                logger.debug(`Google Translate请求被用户中止 | ID: ${request_id}`);
+                return { success: false, error: '请求已取消', cancelled: true };
+            }
+            logger.error(`Google Translate请求失败 | ID: ${request_id} | 错误: ${error.message}`);
+            return { success: false, error: error.message };
+        } finally {
+            runningRequests.delete(request_id);
+        }
+    }
+
+    /**
      * 批量翻译
      */
     static async batchBaiduTranslate(texts, from = 'auto', to = 'zh') {

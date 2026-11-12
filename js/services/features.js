@@ -73,6 +73,11 @@ export const FEATURES = {
     // 混合语言翻译规则
     mixedLangTranslateRule: 'auto_minor', // 自动翻译小比例语言
 
+    // Целевой язык кнопки «Перевод» в текстовых полях:
+    // 'auto' — по локали интерфейса (ru-локаль → en→ru/zh→ru/ru→en),
+    // иначе принудительно 'en' | 'ru' | 'zh'
+    translateTargetLang: 'auto',
+
     // 系统设置
     showStreamingProgress: true, // 显示流式输出进度（终端日志）
     enableStreaming: true, // 启用前端流式输出效果
@@ -115,6 +120,12 @@ export const FEATURES = {
         const mixedLangRule = app.ui.settings.getSettingValue("PromptAssistant.Features.MixedLangTranslateRule");
         if (mixedLangRule) {
             this.mixedLangTranslateRule = mixedLangRule;
+        }
+
+        // 加载目标语言设置 (кнопка перевода у текстовых полей)
+        const translateTargetLang = app.ui.settings.getSettingValue("PromptAssistant.Features.TranslateTargetLang");
+        if (translateTargetLang === 'en' || translateTargetLang === 'ru' || translateTargetLang === 'zh' || translateTargetLang === 'auto') {
+            this.translateTargetLang = translateTargetLang;
         }
 
         // 加载系统设置

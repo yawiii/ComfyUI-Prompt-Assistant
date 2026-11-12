@@ -8,6 +8,7 @@ import { logger } from "../utils/logger.js";
 import { UIToolkit } from "../utils/UIToolkit.js";
 import { createSplitButton, createTooltip } from "./uiComponents.js";
 import { PromptFormatter } from "../utils/promptFormatter.js";
+import { getCurrentUiLanguage } from "../utils/uiI18n.js";
 
 class NodeHelpTranslator {
     constructor() {
@@ -370,7 +371,7 @@ class NodeHelpTranslator {
         const mainBtn = splitBtn.container.querySelector('.p-button:first-child');
         mainBtn.classList.add('pa-translate-btn');
         mainBtn.dataset.nodeName = nodeName;
-        mainBtn.dataset.targetLang = 'zh'; // 默认翻译为中文
+        mainBtn.dataset.targetLang = this._defaultTargetLang(); // RU-FORK: ru-локаль -> по умолчанию русский
         mainBtn._paSplitBtn = splitBtn;
         this.currentHelpPanel.splitBtn = splitBtn;
 
@@ -393,12 +394,22 @@ class NodeHelpTranslator {
         }
     }
 
+    /**
+     * RU-FORK: язык по умолчанию для перевода справки узлов —
+     * при русской локали интерфейса это русский, иначе прежний 'zh'.
+     */
+    _defaultTargetLang() {
+        try {
+            if (getCurrentUiLanguage() === 'ru') return 'ru';
+        } catch { }
+        return 'zh';
+    }
+
     _resetButtonState(btn, newNodeName) {
         btn.dataset.nodeName = newNodeName;
-        btn.dataset.targetLang = 'zh'; // 默认重置为中文
+        btn.dataset.targetLang = this._defaultTargetLang(); // RU-FORK: ru-локаль -> по умолчанию русский
         this._setButtonContent(btn, 'translate');
         btn.disabled = false;
-
         if (btn._paSplitBtn) {
             btn._paSplitBtn.updateMenu(this._getMenuItems(newNodeName, 'bilingual'));
         }
@@ -464,7 +475,9 @@ class NodeHelpTranslator {
 
         const nodeName = btn.dataset.nodeName;
         const targetLang = btn.dataset.targetLang || 'zh';
-        const from = targetLang === 'zh' ? 'en' : 'zh';
+        // RU-FORK: node help документация по умолчанию на английском/китайском;
+        // для русского целью ставим ru, источником — en (docs на английском)
+        const from = targetLang === 'zh' ? 'en' : (targetLang === 'ru' ? 'en' : 'zh');
         const to = targetLang;
 
         // 寻找内容容器的增强逻辑 (与 _handleModeChange 保持一致)
@@ -1174,6 +1187,21 @@ class NodeHelpTranslator {
                     const b = document.querySelector(`.pa-translate-btn[data-node-name="${nodeName}"]`);
                     if (b) {
                         b.dataset.targetLang = 'en';
+                        if (this.currentHelpPanel.splitBtn) {
+                            this.currentHelpPanel.splitBtn.updateMenu(this._getMenuItems(nodeName, currentMode));
+                        }
+                    }
+                }
+            },
+            {
+                // RU-FORK: перевод справки узлов на русский
+                label: '翻译成俄语',
+                icon: targetLang === 'ru' ? 'pi pi-check' : '',
+                className: targetLang === 'ru' ? 'pa-menu-item-active' : '',
+                command: () => {
+                    const b = document.querySelector(`.pa-translate-btn[data-node-name="${nodeName}"]`);
+                    if (b) {
+                        b.dataset.targetLang = 'ru';
                         if (this.currentHelpPanel.splitBtn) {
                             this.currentHelpPanel.splitBtn.updateMenu(this._getMenuItems(nodeName, currentMode));
                         }

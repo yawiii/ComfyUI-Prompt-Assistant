@@ -49,6 +49,59 @@ class LLMService(OpenAICompatibleService):
     def _is_chinese(text: str) -> bool:
         """判断文本是否包含中文"""
         return any('\u4e00' <= char <= '\u9fff' for char in text)
+
+    @staticmethod
+    def select_translate_rule(system_prompts_data: Optional[Dict[str, Any]], from_lang: str, to_lang: str) -> Optional[Dict[str, Any]]:
+        """Выбрать правило перевода для направления (pure-функция, покрыта тестами).
+
+        Приоритет:
+        1. Активированное пользователем правило — если id отличается от дефолта "ZH"
+           (пользователь явно выбрал правило в менеджере правил).
+        2. Правило, именованное по направлению, например "EN_RU" / "RU_EN" —
+           поставляется шаблоном форка и даёт строгий перевод для этих направлений.
+        3. Дефолтное/первое доступное правило (поведение upstream).
+        """
+        if not isinstance(system_prompts_data, dict):
+            return None
+        translate_prompts = system_prompts_data.get("translate_prompts", {})
+        if not isinstance(translate_prompts, dict) or not translate_prompts:
+            return None
+
+        active_prompts = system_prompts_data.get("active_prompts", {})
+        active_id = active_prompts.get("translate", "ZH") if isinstance(active_prompts, dict) else "ZH"
+
+        # 1. Явный пользовательский выбор (не дефолт)
+        if active_id and active_id != "ZH" and active_id in translate_prompts:
+            return translate_prompts[active_id]
+
+        # 2. Правило под конкретное направление (EN_RU, RU_EN, ZH_EN, ...)
+        direction_id = f"{str(from_lang).lower()}_{str(to_lang).lower()}".upper()
+        if direction_id in translate_prompts:
+            return translate_prompts[direction_id]
+
+        # 3. Дефолт / первое доступное (upstream-поведение)
+        if active_id in translate_prompts:
+            return translate_prompts[active_id]
+        return next(iter(translate_prompts.values()))
+
+    @staticmethod
+    def _builtin_translate_instruction(from_name: str, to_name: str) -> str:
+        """Встроенная строгая инструкция перевода (фолбэк, когда ни одно правило
+        не найдено — например, у установок, не получивших новые шаблоны)."""
+        return (
+            f"Role: You are a professional translator for AI image-generation prompts. "
+            f"Translate the user's text from {from_name} into {to_name}.\n"
+            f"Absolute rules:\n"
+            f"1. Output ONLY the translation. No comments, no explanations, no prefixes, no quotes, no Markdown styling.\n"
+            f"2. Do NOT translate or alter technical tokens: weights like (word:1.2), ((word)), [word], {{word}}, "
+            f"file paths, URLs, model/LoRA/VAE/ControlNet names, and existing English technical terms (LoRA, VAE, checkpoint, embedding).\n"
+            f"3. Preserve Markdown structure (code blocks, headings, bold, tables) in place.\n"
+            f"4. Preserve the original style: full sentences stay sentences, comma-separated tags stay tags, "
+            f"line breaks and paragraph order are preserved. Do not omit or truncate any part of the text.\n"
+            f"5. Use standard half-width punctuation of the target language; do not invent details absent from the source.\n"
+            f"6. If the text is already mostly in {to_name}, return it unchanged."
+        )
+
     
     @staticmethod
     async def _call_ollama_native(
@@ -146,6 +199,13 @@ class LLMService(OpenAICompatibleService):
                 "messages": ollama_messages,
                 "stream": True
             }
+
+            # RU-FORK(VRAM): при включённой авто-выгрузке Ollama освобождает модель
+            # сразу после завершения ответа (keep_alive=0), а не держит её 5 минут
+            # по умолчанию — исключает OOM при последующей загрузке диффузионной
+            # модели. Пост-выгрузка _unload_ollama_model остаётся как страховка.
+            if auto_unload:
+                payload["keep_alive"] = 0
             
             # ---构建 options---
             # 基础参数：num_ctx（动态上下文窗口大小）
@@ -170,10 +230,13 @@ class LLMService(OpenAICompatibleService):
                 payload.update(_thinking_extra)
             
             from ..server import is_streaming_progress_enabled
-            
-            # 动态超时计算: 基础30s + 每1000个Token预估增加5秒
+
+            # Динамический таймаут: база 30s + за каждый 1000 токенов контекста 5s.
+            # RU-FORK FIX: нижняя граница 60s была недостаточна для длинных переводов —
+            # холодная загрузка модели (~20s) + prompt eval + генерация длинного ответа
+            # легко превышают 60s (замер на RTX 4060 Ti: первый токен через 39s).
             estimated_timeout = 30.0 + (num_ctx / 1000) * 5.0
-            final_timeout = min(600.0, max(60.0, estimated_timeout)) # 限制在 60s - 600s 之间
+            final_timeout = min(600.0, max(180.0, estimated_timeout)) # 180s - 600s
             
             # 创建统一进度条（自动处理等待→生成→完成的完整生命周期）
             extra_info = f"Context:{num_ctx} | Timeout:{int(final_timeout)}s"
@@ -516,7 +579,7 @@ class LLMService(OpenAICompatibleService):
                 "fr": "French",
                 "de": "German",
                 "es": "Spanish",
-                "ru": "Russian",
+                "ru": "Russian (Русский)",
                 "ar": "Arabic",
                 "pt": "Portuguese",
                 "pt-br": "Brazilian Portuguese",
@@ -525,20 +588,17 @@ class LLMService(OpenAICompatibleService):
                 "fa": "Persian (Farsi)",
                 "auto": "the detected source language"
             }
-            from_name = _LANG_NAMES.get(from_lang.lower(), from_lang)
-            to_name = _LANG_NAMES.get(to_lang.lower(), to_lang)
+            from_name = _LANG_NAMES.get(str(from_lang).lower(), from_lang)
+            to_name = _LANG_NAMES.get(str(to_lang).lower(), to_lang)
 
             translate_instruction = None
+            prompt_entry = None
             try:
                 system_prompts_data = config_manager.get_system_prompts()
-                translate_prompts = system_prompts_data.get("translate_prompts", {})
-                # 读取激活的翻译规则（当前只有 ZH，后续可扩展）
-                active_prompts = system_prompts_data.get("active_prompts", {})
-                active_translate_id = active_prompts.get("translate", "ZH")
-                prompt_entry = translate_prompts.get(active_translate_id)
-                # 若激活的规则不存在，回退到第一个可用规则
-                if not prompt_entry and translate_prompts:
-                    prompt_entry = next(iter(translate_prompts.values()))
+                # BUG-FIX(RU): раньше активное правило всегда было "ZH" и
+                # игнорировало направление; теперь правило выбирается и по
+                # направлению (EN_RU / RU_EN из шаблона), и по явной активации.
+                prompt_entry = LLMService.select_translate_rule(system_prompts_data, from_lang, to_lang)
                 if prompt_entry and prompt_entry.get("content"):
                     # 替换 {src_lang} / {dst_lang} 占位符为自然语言名称
                     translate_instruction = (
@@ -549,12 +609,9 @@ class LLMService(OpenAICompatibleService):
             except Exception as e:
                 print(f"\n[PA] 读取翻译规则失败，使用默认提示词: {e}", flush=True)
 
-            # 终极兜底：规则管理器读取失败时使用英文简化指令
+            # 终极兜底：规则管理器读取失败或无可用规则时使用内置严格指令
             if not translate_instruction:
-                translate_instruction = (
-                    f"Translate the following text from {from_name} to {to_name}. "
-                    f"Output only the translation result with no explanations or additional content."
-                )
+                translate_instruction = LLMService._builtin_translate_instruction(from_name, to_name)
 
             messages = [
                 {"role": "system", "content": translate_instruction},

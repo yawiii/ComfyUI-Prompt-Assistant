@@ -104,6 +104,7 @@
                 "tooltip": "Çeviri için hedef dil",
                 "options": {
                     "English": "İngilizce",
+                    "Russian": "Rusça",
                     "Chinese": "Çince"
                 }
             },

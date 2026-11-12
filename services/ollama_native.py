@@ -18,6 +18,25 @@ from .ollama_utils import (
 
 class OllamaNativeAdapter:
     @staticmethod
+    def format_request_error(req_err: Exception, provider_label: str = "Ollama", timeout: float = None) -> str:
+        """Единое форматирование ошибок запроса к Ollama.
+
+        RU-FORK FIX: str(TimeoutError) пуст -> раньше в лог уходило "请求异常:" без
+        причины. Теперь таймаут и пустые сообщения раскрываются явно.
+        """
+        import asyncio as _asyncio
+        if isinstance(req_err, (httpx.TimeoutException, _asyncio.TimeoutError, TimeoutError)):
+            t = f" {int(timeout)}s" if timeout else ""
+            return (f"{provider_label} 请求超时{t} (timeout) — модель не успела ответить. "
+                    f"Уменьшите длину текста или повторите запрос (первый прогон после "
+                    f"простоя включает загрузку модели в VRAM и занимает больше времени).")
+        name = type(req_err).__name__
+        msg = str(req_err).strip()
+        if not msg:
+            msg = repr(req_err)
+        return f"{provider_label} 请求异常: {name}: {msg}"
+
+    @staticmethod
     async def stream_chat(
         *,
         model: str,
@@ -195,9 +214,10 @@ class OllamaNativeAdapter:
                 pbar.cancel(f"任务被中断 | 服务:{provider_label}")
                 return {"success": False, "error": "任务被中断", "interrupted": True}
             except Exception as req_err:
+                error_msg = OllamaNativeAdapter.format_request_error(req_err, provider_label, timeout)
                 if pbar:
-                    pbar.error(f"{provider_label} 请求异常: {req_err}")
-                return {"success": False, "error": f"{provider_label} 请求异常: {req_err}"}
+                    pbar.error(error_msg)
+                return {"success": False, "error": error_msg}
             finally:
                 if not monitor_task.done():
                     monitor_task.cancel()

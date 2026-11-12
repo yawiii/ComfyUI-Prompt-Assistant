@@ -284,24 +284,80 @@ class PromptFormatter {
     }
 
     /**
+     * Определить, включён ли "русский режим" перевода:
+     * - явная настройка PromptAssistant.Features.TranslateTargetLang = 'ru', или
+     * - настройка 'auto' (по умолчанию) и интерфейс переключён на русскую локаль.
+     */
+    static isRussianTranslateMode() {
+        const target = window.FEATURES?.translateTargetLang;
+        if (target === 'ru') return true;
+        if (target === 'en' || target === 'zh') return false;
+        try {
+            const lang = localStorage.getItem('PromptAssistant.Settings.InterfaceLanguage');
+            return lang === 'ru';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * 判断文本的语言类型
+     * Поддерживает en / ru / zh. Поведение для пользователей с zh/en-локалью
+     * не изменено (zh↔en); при русской локали или явной настройке
+     * TranslateTargetLang=en→ru, zh→ru, ru→en.
      */
     static detectLanguage(text) {
         try {
             if (!text) {
-                return {
-                    from: 'en',
-                    to: 'zh'
-                };
+                return { from: 'en', to: 'zh' };
             }
 
             // 检查是否包含中文字符
             const hasChineseChars = /[\u4e00-\u9fff]/.test(text);
             // 检查是否包含英文字符
             const hasEnglishChars = /[a-zA-Z]/.test(text);
+            // 检查是否包含西里尔字符 (RU)
+            const hasCyrillicChars = /[\u0400-\u04ff]/.test(text);
 
+            const ruMode = this.isRussianTranslateMode();
             let from, to, type;
 
+            // ---Явная настройка целевого языка (приоритет)---
+            const forcedTarget = window.FEATURES?.translateTargetLang;
+            if (forcedTarget === 'en' || forcedTarget === 'ru' || forcedTarget === 'zh') {
+                to = forcedTarget;
+                from = hasChineseChars ? 'zh' : (hasCyrillicChars ? (hasEnglishChars ? 'auto' : 'ru') : (hasEnglishChars ? 'en' : 'auto'));
+                if (from === to) {
+                    // Текст уже на целевом языке — пусть LLM определит источник сам
+                    from = 'auto';
+                    type = `已为目标语言(${to})`;
+                } else {
+                    type = `强制目标:${to}`;
+                }
+                logger.debug(`语言检测 | 结果:${type} | 翻译方向:${from}→${to}`);
+                return { from, to };
+            }
+
+            if (ruMode) {
+                // ---Русский режим: en→ru, zh→ru, ru→en---
+                if (hasChineseChars) {
+                    from = 'auto'; // китайский или смешанный (кит.+термины)
+                    to = 'ru';
+                    type = '中文→俄语';
+                } else if (hasCyrillicChars) {
+                    from = 'ru';
+                    to = 'en';
+                    type = '俄语→英语';
+                } else {
+                    from = 'en';
+                    to = 'ru';
+                    type = '英语→俄语';
+                }
+                logger.debug(`语言检测 | 结果:${type} | 翻译方向:${from}→${to}`);
+                return { from, to };
+            }
+
+            // ---Классический режим zh↔en (без изменений, upstream)---
             if (hasChineseChars && !hasEnglishChars) {
                 // 纯中文
                 from = 'zh';
@@ -312,6 +368,12 @@ class PromptFormatter {
                 from = 'en';
                 to = 'zh';
                 type = '纯英文';
+            } else if (!hasChineseChars && !hasEnglishChars && hasCyrillicChars) {
+                // 纯俄文 (не-ру локаль: сохраняем прежний результат "в английский",
+                // но с корректным определением источника)
+                from = 'ru';
+                to = 'en';
+                type = '纯俄文';
             } else {
                 // 混合语言：按中文汉字数量 vs 英文单词数量比较以决定方向
                 const cnChars = text.match(/[\u4e00-\u9fff]/g) || [];

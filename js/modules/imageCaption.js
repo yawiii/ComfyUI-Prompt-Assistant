@@ -15,6 +15,7 @@ import { rulesConfigManager } from "./rulesConfigManager.js";
 import { nodeMountService, RENDER_MODE } from "../services/NodeMountService.js";
 import { AssistantContainer, ANCHOR_POSITION } from "./AssistantContainer.js";
 import { PopupManager } from "../utils/popupManager.js";
+import { tUI } from "../utils/uiI18n.js"; // RU-FORK: локализация статус-сообщений
 
 
 
@@ -636,11 +637,11 @@ class ImageCaption {
                                         });
                                         if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
                                         const modelLabel = model.display_name || model.name;
-                                        UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${service.name} - ${modelLabel}`);
+                                        UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${service.name} - ${modelLabel}`);
                                         logger.log(`视觉服务切换 | 服务: ${service.name} | 模型: ${modelLabel}`);
                                     } catch (err) {
                                         logger.error(`切换视觉模型失败: ${err.message}`);
-                                        UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${err.message}`);
+                                        UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${err.message}`);
                                     }
                                 }
                             };
@@ -657,11 +658,11 @@ class ImageCaption {
                                         body: JSON.stringify({ service_type: 'vlm', service_id: service.id })
                                     });
                                     if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
-                                    UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${service.name}`);
+                                    UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${service.name}`);
                                     logger.log(`视觉服务切换 | 服务: ${service.name}`);
                                 } catch (err) {
                                     logger.error(`切换视觉服务失败: ${err.message}`);
-                                    UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${err.message}`);
+                                    UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${err.message}`);
                                 }
                             },
                             children: modelChildren.length > 0 ? modelChildren : undefined
@@ -683,13 +684,13 @@ class ImageCaption {
                                 body: JSON.stringify({ type: 'vision_zh', prompt_id: prompt.id })
                             });
                             if (response.ok) {
-                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${prompt.name}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${prompt.name}`);
                             } else {
                                 throw new Error(`服务器返回错误: ${response.status}`);
                             }
                         } catch (error) {
                             logger.error(`切换中文反推提示词失败: ${error.message}`);
-                            UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${error.message}`);
+                            UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${error.message}`);
                         }
                     }
                 });
@@ -837,11 +838,11 @@ class ImageCaption {
                                         });
                                         if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
                                         const modelLabel = model.display_name || model.name;
-                                        UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${service.name} - ${modelLabel}`);
+                                        UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${service.name} - ${modelLabel}`);
                                         logger.log(`视觉服务切换 | 服务: ${service.name} | 模型: ${modelLabel}`);
                                     } catch (err) {
                                         logger.error(`切换视觉模型失败: ${err.message}`);
-                                        UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${err.message}`);
+                                        UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${err.message}`);
                                     }
                                 }
                             };
@@ -858,11 +859,11 @@ class ImageCaption {
                                         body: JSON.stringify({ service_type: 'vlm', service_id: service.id })
                                     });
                                     if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
-                                    UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${service.name}`);
+                                    UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${service.name}`);
                                     logger.log(`视觉服务切换 | 服务: ${service.name}`);
                                 } catch (err) {
                                     logger.error(`切换视觉服务失败: ${err.message}`);
-                                    UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${err.message}`);
+                                    UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${err.message}`);
                                 }
                             },
                             children: modelChildren.length > 0 ? modelChildren : undefined
@@ -884,13 +885,13 @@ class ImageCaption {
                                 body: JSON.stringify({ type: 'vision_en', prompt_id: prompt.id })
                             });
                             if (response.ok) {
-                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: ${prompt.name}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `${tUI('已切换到: ')}${prompt.name}`);
                             } else {
                                 throw new Error(`服务器返回错误: ${response.status}`);
                             }
                         } catch (error) {
                             logger.error(`切换英文反推提示词失败: ${error.message}`);
-                            UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${error.message}`);
+                            UIToolkit.showStatusTip(context.buttonElement, 'error', `${tUI('切换失败: ')}${error.message}`);
                         }
                     }
                 });

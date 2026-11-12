@@ -86,6 +86,10 @@ class LLMNodeBase(BaseNode):
         # 即使没有配置 app_id，也要显示百度选项
         options.append("百度翻译")
 
+        # ---RU-FORK: Google Translate (бесплатный публичный эндпоинт, без ключей)---
+        # Значение Combo сериализуется в workflow "как есть" — строка стабильна
+        options.append("Google Translate")
+
         # ---动态获取其他 LLM 服务---
         services = config_manager.get_all_services()
 
@@ -130,6 +134,10 @@ class LLMNodeBase(BaseNode):
         # ---特殊处理：百度翻译---
         if service_name in ['百度翻译', '百度', 'baidu']:
             return 'baidu', None
+
+        # ---RU-FORK: Google Translate (бесплатный, без модели)---
+        if service_name in ['Google Translate', 'google', 'google_translate']:
+            return 'google', None
 
         # 查找对应的 service_id
         services = config_manager.get_all_services()

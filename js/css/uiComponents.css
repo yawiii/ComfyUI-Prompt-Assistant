@@ -150,11 +150,13 @@
     /* height: 760px; */
     margin: 0;
     z-index: var(--settings-modal-z-index);
-    background-color: var(--p-dialog-background);
-    border: 1px solid var(--p-dialog-border-color);
-    border-radius: var(--p-dialog-border-radius);
-    box-shadow: var(--p-dialog-shadow);
-    color: var(--p-dialog-color);
+    /* RU-FORK: в новом фронтенде ComfyUI токены --p-dialog-* не определены
+       (фон окна становился прозрачным) — каскадные фолбэки на рабочие токены */
+    background-color: var(--p-dialog-background, var(--p-content-background, #1a1a1e));
+    border: 1px solid var(--p-dialog-border-color, var(--p-content-border-color, #3f3f46));
+    border-radius: var(--p-dialog-border-radius, 8px);
+    box-shadow: var(--p-dialog-shadow, 0 4px 12px rgba(0, 0, 0, 0.5));
+    color: var(--p-dialog-color, var(--p-text-color, #e5e5e5));
     /* 添加弹性布局 */
     display: flex;
     flex-direction: column;
@@ -162,6 +164,17 @@
     opacity: 0;
     visibility: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* RU-FORK: в новом фронтенде ComfyUI токены --p-dialog-* не определены.
+   Определяем их скоупом на нашем окне: каскадные переменные наследуются всем
+   дочерним элементам модалки, а чужую тему (:root) не затрагиваем. */
+.settings-modal {
+    --p-dialog-background: var(--p-content-background, #1a1a1e);
+    --p-dialog-border-color: var(--p-content-border-color, #3f3f46);
+    --p-dialog-color: var(--p-text-color, #e5e5e5);
+    --p-dialog-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --p-dialog-border-radius: 8px;
 }
 
 /* ---二次确认对话框独立样式--- */
@@ -223,6 +236,9 @@
     opacity: 0;
     visibility: hidden;
     transform: translate(-50%, -50%) scale(0.8);
+    /* BUG-FIX(RU): во время 300мс анимации закрытия visibility переключается
+       в конце перехода — окно оставалось кликабельным ("прозрачная ловушка"). */
+    pointer-events: none;
 }
 
 /* 拖动时的状态 */
@@ -3190,8 +3206,10 @@ body.column-resizing * {
    =================================================== */
 
 /* API 管理器主窗口 - 设置最小高度以适应内容 */
+/* RU-FORK: min-height не должен выталкивать окно за границы экрана
+   (min-height побеждает max-height в CSS) — ограничиваем вьюпортом */
 .settings-modal.api-config-dialog-v2 {
-    min-height: 760px;
+    min-height: min(760px, calc(100vh - 24px));
 }
 
 /* 调整通知区域位置到最底部 */
