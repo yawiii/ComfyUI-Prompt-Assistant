@@ -9,21 +9,24 @@ import { tUI, localizeElement, observeLocalizedMutations } from "../utils/uiI18n
 
 // ---动态 Z-Index 计算---
 /**
- * 获取 ComfyUI 设置弹窗的 z-index 值
- * 只针对 ComfyUI 的 p-dialog 元素进行查找，避免遍历所有 DOM 元素造成性能问题
- * @returns {number} ComfyUI 弹窗的 z-index 值，如果不存在则返回基础值
+ * 获取当前 ComfyUI 对话框里最高的 z-index。
+ * 0.45 之前设置窗是 PrimeVue .p-dialog；frontend 1.59 起是带 role=dialog 的浮层。
+ * 插件弹窗仍挂在 body 上，只把层级抬到这些对话框之上。
+ * 不挂进设置窗内部：那个容器有 transform 和 overflow:hidden，fixed 子元素会被裁切。
+ * @returns {number} 对话框 z-index；页面上没有对话框时返回基础值
  */
 function getComfyUIDialogZIndex() {
-    // ComfyUI 使用 PrimeVue，设置弹窗的类名是 .p-dialog
-    const comfyDialog = document.querySelector('.p-dialog');
-    if (comfyDialog) {
-        const zIndex = parseInt(window.getComputedStyle(comfyDialog).zIndex, 10);
+    // 跳过插件自己的 .settings-modal，避免把刚创建的弹窗又算进基数。
+    const dialogs = document.querySelectorAll('.p-dialog, [role="dialog"]');
+    let maxZIndex = 0;
+    dialogs.forEach((dialog) => {
+        if (dialog.classList.contains('settings-modal')) return;
+        const zIndex = parseInt(window.getComputedStyle(dialog).zIndex, 10);
         if (!isNaN(zIndex)) {
-            return zIndex;
+            maxZIndex = Math.max(maxZIndex, zIndex);
         }
-    }
-    // 如果没有找到 ComfyUI 弹窗，返回 CSS 变量定义的基础值
-    return 10200;
+    });
+    return maxZIndex > 0 ? maxZIndex : 10200;
 }
 
 /**
